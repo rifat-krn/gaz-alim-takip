@@ -1,0 +1,59 @@
+services:
+    mongodb:
+        image: mongo:6.0
+        container_name: gaz_alim_mongodb
+        restart: unless-stopped
+        ports:
+            - '27018:27017'
+        volumes:
+            - mongo_data:/data/db
+        environment:
+            - MONGO_INITDB_DATABASE=gaz_alim_takip
+        networks:
+            - gaz_network
+
+    backend:
+        build:
+            context: ./backend
+            dockerfile: Dockerfile
+        container_name: gaz_alim_backend
+        restart: unless-stopped
+        ports:
+            - '5000:5000'
+        environment:
+            - PORT=5000
+            - NODE_ENV=production
+            - MONGODB_URI=mongodb://mongodb:27017/gaz_alim_takip
+            - JWT_SECRET=super_secret_gaz_alim_jwt_key_2026_docker
+            - AKSA_BASE_URL=http://gazolcumkontrol.aksa.com.tr
+            - AKSA_TIMEOUT_MS=10000
+        volumes:
+            - ./uploads:/app/uploads
+            - ./istasyon_listesi.json:/istasyon_listesi.json:ro
+        depends_on:
+            - mongodb
+        networks:
+            - gaz_network
+
+    frontend:
+        build:
+            context: ./frontend
+            dockerfile: Dockerfile
+        container_name: gaz_alim_frontend
+        restart: unless-stopped
+        ports:
+            - '3000:80'
+        depends_on:
+            - backend
+        networks:
+            - gaz_network
+
+volumes:
+    mongo_data:
+        driver: local
+    uploads_data:
+        driver: local
+
+networks:
+    gaz_network:
+        driver: bridge
