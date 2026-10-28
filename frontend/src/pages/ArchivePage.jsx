@@ -364,15 +364,31 @@ export default function ArchivePage() {
                         {reading.status === 'PENDING' && <Badge bg="warning" text="dark">BEKLEMEDE</Badge>}
                       </td>
                       <td className="text-center">
-                        <Button
-                          variant={reading.files && reading.files.length > 0 ? 'outline-primary' : 'outline-secondary'}
-                          size="sm"
-                          className="p-1 px-2 small"
-                          onClick={() => setUploadModalData(reading)}
-                        >
-                          <FileText size={14} className="me-1" />
-                          <span>{reading.files ? reading.files.length : 0}</span>
-                        </Button>
+                        <div className="d-inline-flex align-items-center gap-1">
+                          {reading.files && reading.files.length > 0 ? (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              className="p-1 px-2 small d-inline-flex align-items-center gap-1"
+                              onClick={() => setDetailModalData(reading)}
+                              title="PDF Raporu ve Verileri Yan Yana İncele"
+                            >
+                              <FileText size={14} />
+                              <span>{reading.files.length} Rapor</span>
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline-secondary"
+                              size="sm"
+                              className="p-1 px-2 small"
+                              onClick={() => setUploadModalData(reading)}
+                              title="Dosya Yükle"
+                            >
+                              <FileText size={14} className="me-1" />
+                              <span>Yükle</span>
+                            </Button>
+                          )}
+                        </div>
                       </td>
                       <td className="small">
                         {reading.operatorNote && (
@@ -410,6 +426,10 @@ export default function ArchivePage() {
         show={!!detailModalData}
         onHide={() => setDetailModalData(null)}
         reading={detailModalData}
+        onReadingUpdated={(updated) => {
+          setHistory(prev => prev.map(h => (h._id === updated._id ? updated : h)));
+          setDetailModalData(updated);
+        }}
       />
 
       <FileUploadModal

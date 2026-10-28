@@ -3,7 +3,7 @@ const fs = require('fs');
 const GasReading = require('../models/GasReading');
 const Station = require('../models/Station');
 const { getGasDayInfo } = require('../utils/gasDateHelper');
-const { fetchStationGasData } = require('../services/aksaService');
+const { fetchStationGasData, syncRemoteFilesForReading } = require('../services/aksaService');
 
 // Get all readings for a specific gas date
 exports.getReadingsByDate = async (req, res) => {
@@ -140,6 +140,10 @@ exports.fetchAllStationsForDate = async (req, res) => {
             fetchedAt: new Date(),
             errorMessage: ''
           };
+
+          if (fetchResult.remoteFiles && fetchResult.remoteFiles.length > 0) {
+            await syncRemoteFilesForReading(reading, fetchResult.remoteFiles);
+          }
         } else {
           reading.fetchStatus = {
             isFetched: false,
@@ -222,6 +226,10 @@ exports.fetchSingleStationReading = async (req, res) => {
         fetchedAt: new Date(),
         errorMessage: ''
       };
+
+      if (fetchResult.remoteFiles && fetchResult.remoteFiles.length > 0) {
+        await syncRemoteFilesForReading(reading, fetchResult.remoteFiles);
+      }
     } else {
       reading.fetchStatus = {
         isFetched: false,
@@ -543,6 +551,10 @@ exports.fetchHistoryRange = async (req, res) => {
               fetchedAt: new Date(),
               errorMessage: ''
             };
+
+            if (fetchResult.remoteFiles && fetchResult.remoteFiles.length > 0) {
+              await syncRemoteFilesForReading(reading, fetchResult.remoteFiles);
+            }
           }
           await reading.save();
         } catch (err) {

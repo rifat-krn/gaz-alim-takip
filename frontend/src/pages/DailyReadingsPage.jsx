@@ -130,11 +130,14 @@ export default function DailyReadingsPage() {
     }
   };
 
-  // Files updated callback
+  // Files or reading updated callback
   const handleFilesUpdated = (updatedReading) => {
     setReadings(prev => prev.map(r => (r.u === updatedReading.u ? updatedReading : r)));
     if (uploadModalData && uploadModalData.u === updatedReading.u) {
       setUploadModalData(updatedReading);
+    }
+    if (detailModalData && detailModalData.u === updatedReading.u) {
+      setDetailModalData(updatedReading);
     }
   };
 
@@ -415,16 +418,42 @@ export default function DailyReadingsPage() {
 
                         {/* File Upload / View Button */}
                         <td className="text-center">
-                          <Button
-                            variant={hasFiles ? 'outline-primary' : 'outline-secondary'}
-                            size="sm"
-                            className="position-relative p-1 px-2 d-inline-flex align-items-center gap-1"
-                            onClick={() => setUploadModalData(reading)}
-                            title="Dosya Yükle / Görüntüle"
-                          >
-                            <Upload size={14} />
-                            <span className="small">{hasFiles ? `${reading.files.length} Dosya` : 'Yükle'}</span>
-                          </Button>
+                          <div className="d-inline-flex align-items-center gap-1">
+                            {hasFiles ? (
+                              <>
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  className="p-1 px-2 d-inline-flex align-items-center gap-1"
+                                  onClick={() => setDetailModalData(reading)}
+                                  title="PDF Raporu ve Verileri Yan Yana İncele"
+                                >
+                                  <FileText size={14} />
+                                  <span className="small">{reading.files.length} Rapor</span>
+                                </Button>
+                                <Button
+                                  variant="outline-secondary"
+                                  size="sm"
+                                  className="p-1"
+                                  onClick={() => setUploadModalData(reading)}
+                                  title="Ek Dosya Yükle / Yönet"
+                                >
+                                  <Upload size={13} />
+                                </Button>
+                              </>
+                            ) : (
+                              <Button
+                                variant="outline-secondary"
+                                size="sm"
+                                className="p-1 px-2 d-inline-flex align-items-center gap-1"
+                                onClick={() => setUploadModalData(reading)}
+                                title="Rapor Dosyası Yükle"
+                              >
+                                <Upload size={14} />
+                                <span className="small">Dosya Yükle</span>
+                              </Button>
+                            )}
+                          </div>
                         </td>
 
                         {/* Actions (Approve, Deny, Details, Refresh) */}
@@ -518,6 +547,7 @@ export default function DailyReadingsPage() {
         show={!!detailModalData}
         onHide={() => setDetailModalData(null)}
         reading={detailModalData}
+        onReadingUpdated={handleFilesUpdated}
       />
     </div>
   );

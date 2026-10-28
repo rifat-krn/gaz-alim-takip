@@ -1,5 +1,8 @@
 const axios = require('axios');
+const path = require('path');
+const fs = require('fs');
 const { getGasDayInfo } = require('../utils/gasDateHelper');
+const { sanitizeName, parseDateParts } = require('../middleware/uploadMiddleware');
 
 const BASE_URL = process.env.AKSA_BASE_URL || 'http://gazolcumkontrol.aksa.com.tr';
 const TIMEOUT_MS = parseInt(process.env.AKSA_TIMEOUT_MS || '10000', 10);
@@ -159,6 +162,9 @@ async function fetchStationGasData(u, p, targetGasDay = null) {
         total: d[21] !== undefined ? Number(d[21]) : (d.fld_OperatorCVTotal ? Number(d.fld_OperatorCVTotal) : null)
       };
 
+      // 9. Uzak Sunucudaki Operatör Rapor Dosyaları (files)
+      const remoteFiles = Array.isArray(d.files) ? d.files : (Array.isArray(responseData.files) ? responseData.files : []);
+
       return {
         success: true,
         stationName: st.fld_OrganizationName || null,
@@ -178,6 +184,7 @@ async function fetchStationGasData(u, p, targetGasDay = null) {
         temperature: temperature !== null ? Number(temperature) : null,
         specificGravity: sg !== null ? Number(sg) : null,
         composition,
+        remoteFiles,
         rawData: responseData
       };
     }
@@ -228,7 +235,102 @@ async function loginToAksa(u, p) {
   }
 }
 
+/**
+ * Download remote files from Aksa RMSA server if not already downloaded and save to local uploads folder
+ */
+async function syncRemoteFilesForReading(reading, remoteFiles = []) {
+  if (!Array.isArray(remoteFiles) || remoteFiles.length === 0) {
+    return false;
+  }
+
+  const safeStation = sanitizeName(reading.u || reading.stationName || 'istasyon');
+  const { year, month, day } = parseDateParts(reading.gasDate);
+  const folderName = `${safeStation}-${year}-${month}`;
+  const targetDir = path.join(__dirname, '../../uploads', folderName);
+
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+
+  if (!Array.isArray(reading.files)) {
+    reading.files = [];
+  }
+
+  let modified = false;
+
+  for (const rf of remoteFiles) {
+    if (!rf || !rf.url) continue;
+
+    const origName = rf.name || rf.stored_name || path.basename(rf.url);
+    
+    // Check if this file is already in reading.files (and physically exists)
+    const existingEntry = reading.files.find(f => f.originalName === origName);
+    if (existingEntry && existingEntry.path && fs.existsSync(existingEntry.path)) {
+      continue;
+    }
+
+    try {
+      const cleanRelUrl = String(rf.url).replace(/^\/+/, '');
+      const downloadUrl = cleanRelUrl.startsWith('http') ? cleanRelUrl : `${BASE_URL}/${cleanRelUrl}`;
+
+      const response = await axios.get(downloadUrl, {
+        responseType: 'arraybuffer',
+        timeout: TIMEOUT_MS * 2,
+        headers: {
+          'Referer': `${BASE_URL}/rmsa.php`,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+
+      if (response.status === 200 && response.data) {
+        const ext = path.extname(origName).toLowerCase() || '.pdf';
+        let finalFileName = `${safeStation}-${year}-${month}-${day}-gazalimraporu${ext}`;
+        let counter = 1;
+
+        // If an entry didn't exist, make sure we don't overwrite another different file on disk
+        while (fs.existsSync(path.join(targetDir, finalFileName)) && (!existingEntry || existingEntry.filename !== finalFileName)) {
+          finalFileName = `${safeStation}-${year}-${month}-${day}-gazalimraporu-${counter}${ext}`;
+          counter++;
+        }
+
+        const fullFilePath = path.join(targetDir, finalFileName);
+        fs.writeFileSync(fullFilePath, Buffer.from(response.data));
+
+        const relativeUrl = `/uploads/${folderName}/${finalFileName}`;
+        const mimeType = response.headers['content-type'] || (ext === '.pdf' ? 'application/pdf' : 'application/octet-stream');
+        const size = response.data.byteLength || Buffer.byteLength(response.data);
+
+        if (existingEntry) {
+          existingEntry.filename = finalFileName;
+          existingEntry.path = fullFilePath;
+          existingEntry.relativeUrl = relativeUrl;
+          existingEntry.size = size;
+          existingEntry.mimeType = mimeType;
+        } else {
+          reading.files.push({
+            originalName: origName,
+            filename: finalFileName,
+            path: fullFilePath,
+            relativeUrl: relativeUrl,
+            size: size,
+            mimeType: mimeType,
+            uploadedAt: new Date(),
+            uploadedBy: 'Aksa RMSA (Otomatik)'
+          });
+        }
+
+        modified = true;
+      }
+    } catch (err) {
+      console.warn(`[Aksa File Download Warning] (${reading.u} - ${origName}):`, err.message);
+    }
+  }
+
+  return modified;
+}
+
 module.exports = {
   loginToAksa,
-  fetchStationGasData
+  fetchStationGasData,
+  syncRemoteFilesForReading
 };
