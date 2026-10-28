@@ -574,23 +574,13 @@ export default function DailyReadingsPage() {
                         </td>
 
                         <td className="py-3.5 px-3">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => openVerificationPage(reading)}
-                              className="font-semibold text-slate-900 hover:text-blue-600 text-xs sm:text-sm text-left transition-colors cursor-pointer"
-                            >
-                              {reading.stationName}
-                            </button>
-                            {isSubstituted && (
-                              <span
-                                className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 ring-1 ring-inset ring-amber-600/25"
-                                title={reading.operatorNote || 'GC olmaması / bakımda olması sebebiyle başka istasyonun ikame ısıl değeri kullanılmıştır (fld_SHVSelection: 0)'}
-                              >
-                                ⚠️ İkame Veri
-                              </span>
-                            )}
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => openVerificationPage(reading)}
+                            className="font-semibold text-slate-900 hover:text-blue-600 text-xs sm:text-sm text-left transition-colors cursor-pointer"
+                          >
+                            {reading.stationName}
+                          </button>
                           <div className="flex flex-wrap items-center gap-2 mt-0.5">
                             <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded">
                               {reading.u}
