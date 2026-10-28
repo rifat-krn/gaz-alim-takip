@@ -18,9 +18,9 @@ const generateToken = (user) => {
 
 exports.login = async (req, res) => {
   try {
-    const { username, password } = req.body;
-    if (!username || !password) {
-      return res.status(400).json({ success: false, message: 'Kullanıcı adı ve şifre gereklidir' });
+    const { username, password } = req.body || {};
+    if (!username || !password || typeof username !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({ success: false, message: 'Geçerli kullanıcı adı ve şifre gereklidir' });
     }
 
     const user = await User.findOne({ username: username.toLowerCase().trim() }).populate('assignedStation');

@@ -85,6 +85,12 @@ npm install
 npm run dev
 ```
 
+#### Güvenlik Testlerini Çalıştırma
+```bash
+cd backend
+npm run test:security
+```
+
 ### 2. Frontend
 ```bash
 cd frontend

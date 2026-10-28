@@ -8,26 +8,24 @@ const {
   initDailyCheckScheduler
 } = require('../services/dailyReportCheckService');
 
+const EMAIL_REGEX = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
+
 const normalizeEmails = (input) => {
   if (!input) return [];
-  if (Array.isArray(input)) {
-    return [...new Set(
-      input
-        .flatMap(item => String(item).split(/[,;\s]+/))
-        .map(e => e.trim().toLowerCase())
-        .filter(e => e.includes('@'))
-    )];
-  }
-  if (typeof input === 'string') {
-    return [...new Set(
-      input
-        .split(/[,;\s]+/)
-        .map(e => e.trim().toLowerCase())
-        .filter(e => e.includes('@'))
-    )];
-  }
-  return [];
+  const rawList = Array.isArray(input)
+    ? input.flatMap(item => String(item).split(/[,;\s\r\n]+/))
+    : typeof input === 'string'
+    ? input.split(/[,;\s\r\n]+/)
+    : [];
+
+  return [...new Set(
+    rawList
+      .map(e => e.trim().toLowerCase())
+      .filter(e => EMAIL_REGEX.test(e))
+  )];
 };
+
+exports.normalizeEmails = normalizeEmails;
 
 // List all users
 exports.getAllUsers = async (req, res) => {

@@ -30,11 +30,10 @@ function parseDateParts(dateStr) {
   if (dateStr && typeof dateStr === 'string' && dateStr.includes('-')) {
     const parts = dateStr.split(' ')[0].split('-');
     if (parts.length >= 3) {
-      return {
-        year: parts[0],
-        month: parts[1].padStart(2, '0'),
-        day: parts[2].padStart(2, '0')
-      };
+      const year = parts[0].replace(/[^0-9]/g, '').slice(0, 4) || String(new Date().getFullYear());
+      const month = (parts[1].replace(/[^0-9]/g, '').slice(0, 2) || '01').padStart(2, '0');
+      const day = (parts[2].replace(/[^0-9]/g, '').slice(0, 2) || '01').padStart(2, '0');
+      return { year, month, day };
     }
   }
   const now = new Date();
