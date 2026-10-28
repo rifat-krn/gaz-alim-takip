@@ -34,6 +34,18 @@ const userSchema = new mongoose.Schema({
     default: '',
     trim: true
   },
+  toEmails: {
+    type: [String],
+    default: []
+  },
+  ccEmails: {
+    type: [String],
+    default: []
+  },
+  emailNotificationsEnabled: {
+    type: Boolean,
+    default: true
+  },
   isActive: {
     type: Boolean,
     default: true

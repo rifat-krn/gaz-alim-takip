@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Container, Spinner } from 'react-bootstrap';
 import { useAuth } from './context/AuthContext';
 import AppNavbar from './components/Navbar';
 import LoginPage from './pages/LoginPage';
@@ -14,10 +13,10 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-vh-100 d-flex align-items-center justify-content-center bg-light">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
-          <Spinner animation="border" variant="warning" style={{ width: '3rem', height: '3rem' }} />
-          <div className="mt-3 text-muted fw-semibold">Sistem Yükleniyor...</div>
+          <div className="w-10 h-10 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+          <div className="mt-3 text-sm font-medium text-slate-600">Sistem Yükleniyor...</div>
         </div>
       </div>
     );
@@ -28,20 +27,21 @@ export default function App() {
   }
 
   return (
-    <div className="min-vh-100 bg-light d-flex flex-column">
+    <div className="min-h-screen bg-slate-50/80 flex flex-col text-slate-900">
       <AppNavbar activeTab={activeTab} setActiveTab={setActiveTab} />
       
-      <Container fluid className="px-2 px-sm-3 px-md-4 pb-5 flex-grow-1">
+      <main className="max-w-[1600px] w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 flex-grow">
         {activeTab === 'daily' && <DailyReadingsPage />}
         {activeTab === 'archive' && <ArchivePage />}
         {activeTab === 'stations' && isAdmin && <StationsPage />}
         {activeTab === 'users' && isAdmin && <UsersPage />}
-      </Container>
+      </main>
 
-      <footer className="bg-white border-top py-3 text-center text-muted small mt-auto">
-        <Container>
-          <span>Gaz Alım Takip & Sayaç Veri Sistemi &copy; {new Date().getFullYear()}</span>
-        </Container>
+      <footer className="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500 mt-auto">
+        <div className="max-w-[1600px] mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <span className="font-medium text-slate-600">Gaz Alım Takip & Sayaç Veri Sistemi &copy; {new Date().getFullYear()}</span>
+          <span className="text-slate-400">Aksa RMS-A Canlı Entegrasyon & Belge Doğrulama Platformu</span>
+        </div>
       </footer>
     </div>
   );

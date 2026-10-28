@@ -1,18 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card, Table, Button, Badge, Form, Row, Col, Alert, Spinner, ProgressBar, InputGroup } from 'react-bootstrap';
 import { 
   RefreshCw, CheckCircle2, XCircle, Upload, Eye, FileText, 
-  Calendar, FileSpreadsheet, ChevronLeft, ChevronRight, Search,
-  Activity, Flame, Clock, AlertCircle, Filter
+  FileSpreadsheet, ChevronLeft, ChevronRight, Search,
+  Activity, Flame, Clock, AlertCircle, BarChart3, Check, X
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import api from '../api/axiosClient';
-import ConfirmModal from '../components/ConfirmModal';
-import DenyReasonModal from '../components/DenyReasonModal';
-import FileUploadModal from '../components/FileUploadModal';
-import ReadingDetailModal from '../components/ReadingDetailModal';
+import ReadingVerificationPage from './ReadingVerificationPage';
 
-// Helper to get default gas date (yesterday's date in YYYY-MM-DD)
 const getDefaultGasDate = () => {
   const d = new Date();
   d.setDate(d.getDate() - 1);
@@ -26,20 +21,21 @@ export default function DailyReadingsPage() {
   const [loading, setLoading] = useState(false);
   const [fetchingAll, setFetchingAll] = useState(false);
   const [fetchingSingleId, setFetchingSingleId] = useState(null);
-  const [actionLoading, setActionLoading] = useState(false);
   const [message, setMessage] = useState(null);
 
-  // Dashboard Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL'); // ALL, APPROVED, PENDING, DENIED, WITH_REPORT
+  const [showAnalytics, setShowAnalytics] = useState(true);
 
-  // Modals state
-  const [confirmModalData, setConfirmModalData] = useState(null);
-  const [denyModalData, setDenyModalData] = useState(null);
-  const [uploadModalData, setUploadModalData] = useState(null);
-  const [detailModalData, setDetailModalData] = useState(null);
+  // Full-Page Verification State (replaces modals)
+  const [activeReadingPage, setActiveReadingPage] = useState(null);
+  const [initialRejectMode, setInitialRejectMode] = useState(false);
 
-  // Auto-fetch all stations live on load and date change
+  const openVerificationPage = (reading, rejectMode = false) => {
+    setInitialRejectMode(rejectMode);
+    setActiveReadingPage(reading);
+  };
+
   const fetchAllForDate = async (targetDate) => {
     setFetchingAll(true);
     setMessage(null);
@@ -69,7 +65,6 @@ export default function DailyReadingsPage() {
     fetchAllForDate(selectedDate);
   }, [selectedDate]);
 
-  // Step date by +/- days
   const handleStepDate = (days) => {
     const d = new Date(selectedDate);
     d.setDate(d.getDate() + days);
@@ -80,7 +75,6 @@ export default function DailyReadingsPage() {
     fetchAllForDate(selectedDate);
   };
 
-  // Fetch single station
   const handleFetchSingle = async (reading) => {
     const stationId = reading.stationId?._id || reading.stationId;
     if (!stationId) return;
@@ -105,52 +99,39 @@ export default function DailyReadingsPage() {
     }
   };
 
-  // Approve Reading
-  const handleApprove = async (readingId, notes) => {
-    setActionLoading(true);
-    try {
-      const res = await api.post(`/readings/${readingId}/approve`, { notes });
-      if (res.data.success) {
-        setReadings(prev => prev.map(r => (r._id === readingId ? res.data.reading : r)));
-        setMessage({ type: 'success', text: res.data.message });
-        setConfirmModalData(null);
-      }
-    } catch (err) {
-      setMessage({ type: 'danger', text: 'Onaylama hatası: ' + (err.response?.data?.message || err.message) });
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // Deny Reading
-  const handleDeny = async (readingId, rejectionReason) => {
-    setActionLoading(true);
-    try {
-      const res = await api.post(`/readings/${readingId}/deny`, { rejectionReason });
-      if (res.data.success) {
-        setReadings(prev => prev.map(r => (r._id === readingId ? res.data.reading : r)));
-        setMessage({ type: 'warning', text: res.data.message });
-        setDenyModalData(null);
-      }
-    } catch (err) {
-      setMessage({ type: 'danger', text: 'Reddetme hatası: ' + (err.response?.data?.message || err.message) });
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // Files or reading updated callback
   const handleFilesUpdated = (updatedReading) => {
     setReadings(prev => prev.map(r => (r.u === updatedReading.u ? updatedReading : r)));
-    if (uploadModalData && uploadModalData.u === updatedReading.u) {
-      setUploadModalData(updatedReading);
-    }
-    if (detailModalData && detailModalData.u === updatedReading.u) {
-      setDetailModalData(updatedReading);
+    if (activeReadingPage && activeReadingPage.u === updatedReading.u) {
+      setActiveReadingPage(updatedReading);
     }
   };
 
-  // Excel Export
+  const checkIsSubstituted = (r) => {
+    if (!r) return false;
+    const d = r.rawData?.data || {};
+    const st = r.rawData?.station || {};
+    const hasRawSelection =
+      d.fld_OperatorSHVSelection !== undefined ||
+      d[25] !== undefined ||
+      d.fld_SHVSelection !== undefined ||
+      d[36] !== undefined ||
+      st.fld_OrganizationSHVSelection !== undefined ||
+      st[33] !== undefined;
+
+    if (hasRawSelection) {
+      if (d.fld_OperatorSHVSelection !== undefined && d.fld_OperatorSHVSelection !== null && Number(d.fld_OperatorSHVSelection) === 0) return true;
+      if (d[25] !== undefined && d[25] !== null && Number(d[25]) === 0) return true;
+      if (d.fld_SHVSelection !== undefined && d.fld_SHVSelection !== null && Number(d.fld_SHVSelection) === 0) return true;
+      if (d[36] !== undefined && d[36] !== null && Number(d[36]) === 0) return true;
+      if (st.fld_OrganizationSHVSelection !== undefined && st.fld_OrganizationSHVSelection !== null && Number(st.fld_OrganizationSHVSelection) === 0) return true;
+      if (st[33] !== undefined && st[33] !== null && Number(st[33]) === 0) return true;
+      if (d.fld_GCOrganizationId !== undefined && d.fld_GCOrganizationId !== null && Number(d.fld_GCOrganizationId) > 0) return true;
+      return false;
+    }
+
+    return Boolean(r.isSubstitutedSHV);
+  };
+
   const handleExportExcel = () => {
     const exportData = readings.map((r, idx) => ({
       'No': idx + 1,
@@ -162,6 +143,7 @@ export default function DailyReadingsPage() {
       'Tüketim (Sm³)': r.consumption || 0,
       'Enerji (kcal)': r.energy || 0,
       'Üst Isıl Değer (Ho)': r.superiorHeatingValue || 0,
+      'Isıl Değer Kaynağı': checkIsSubstituted(r) ? 'İKAME VERİ (BAŞKA İSTASYON GC)' : 'KENDİ GC VERİSİ',
       'Basınç (Bar)': r.pressure || 0,
       'Sıcaklık (°C)': r.temperature || 0,
       'Durum': r.status === 'APPROVED' ? 'ONAYLANDI' : r.status === 'DENIED' ? 'REDDEDİLDİ' : 'BEKLEMEDE',
@@ -177,16 +159,17 @@ export default function DailyReadingsPage() {
     XLSX.writeFile(wb, `Gaz_Alim_Raporu_${selectedDate}.xlsx`);
   };
 
-  // Calculate totals & KPI metrics
+  // KPI Calculations
   const totalConsumption = readings.reduce((sum, r) => sum + (Number(r.consumption) || 0), 0);
   const totalEnergy = readings.reduce((sum, r) => sum + (Number(r.energy) || 0), 0);
   const approvedCount = readings.filter(r => r.status === 'APPROVED').length;
   const pendingCount = readings.filter(r => r.status === 'PENDING').length;
   const deniedCount = readings.filter(r => r.status === 'DENIED').length;
   const withReportCount = readings.filter(r => r.files && r.files.length > 0).length;
+  const substitutedCount = readings.filter(r => checkIsSubstituted(r)).length;
   const approvalProgress = readings.length > 0 ? Math.round((approvedCount / readings.length) * 100) : 0;
+  const maxStationConsumption = Math.max(...readings.map(r => Number(r.consumption) || 0), 1);
 
-  // Filtered readings based on search and status pill
   const filteredReadings = useMemo(() => {
     return readings.filter(r => {
       const matchesSearch = !searchQuery.trim() || 
@@ -199,626 +182,756 @@ export default function DailyReadingsPage() {
       if (statusFilter === 'PENDING') return r.status === 'PENDING';
       if (statusFilter === 'DENIED') return r.status === 'DENIED';
       if (statusFilter === 'WITH_REPORT') return r.files && r.files.length > 0;
+      if (statusFilter === 'SUBSTITUTED') return checkIsSubstituted(r);
       return true;
     });
   }, [readings, searchQuery, statusFilter]);
 
+  // If a station reading is selected for verification/approval, show full page instead of modal
+  if (activeReadingPage) {
+    return (
+      <ReadingVerificationPage
+        reading={activeReadingPage}
+        initialShowReject={initialRejectMode}
+        onBack={() => {
+          setActiveReadingPage(null);
+          setInitialRejectMode(false);
+        }}
+        onReadingUpdated={handleFilesUpdated}
+      />
+    );
+  }
+
   return (
-    <div>
-      {/* Top Action & Date Control Bar */}
-      <div className="dashboard-card p-3 p-md-4 mb-3 mb-md-4">
-        <Row className="align-items-center g-3">
-          {/* Date Selector with Quick Prev/Next */}
-          <Col xl={4} lg={5} md={12}>
-            <div className="d-flex flex-column">
-              <span className="text-muted fw-bold text-uppercase mb-1.5" style={{ fontSize: '11px', letterSpacing: '0.5px' }}>
-                📅 Gaz Günü Seçimi & Navigasyon
-              </span>
-              <div className="d-flex align-items-center gap-1.5">
-                <Button 
-                  variant="outline-secondary" 
-                  className="px-2.5 py-2 d-flex align-items-center justify-content-center"
-                  onClick={() => handleStepDate(-1)}
-                  disabled={fetchingAll}
-                  title="Önceki Gün"
-                >
-                  <ChevronLeft size={18} />
-                </Button>
-
-                <Form.Control
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="fw-bold text-center py-2 shadow-none"
-                  style={{ maxWidth: '175px' }}
-                />
-
-                <Button 
-                  variant="outline-secondary" 
-                  className="px-2.5 py-2 d-flex align-items-center justify-content-center"
-                  onClick={() => handleStepDate(1)}
-                  disabled={fetchingAll}
-                  title="Sonraki Gün"
-                >
-                  <ChevronRight size={18} />
-                </Button>
-
-                <Button
-                  variant="light"
-                  size="sm"
-                  className="border fw-semibold px-2.5 py-2 ms-1 text-nowrap"
-                  onClick={() => setSelectedDate(getDefaultGasDate())}
-                  disabled={fetchingAll}
-                >
-                  Dün
-                </Button>
-              </div>
+    <div className="space-y-5">
+      {/* Top Tremor Control Bar */}
+      <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-2xs p-4 sm:p-5">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          {/* Left: Title & Date Navigator */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div>
+              <h1 className="text-lg font-bold text-slate-900 tracking-tight">Günlük Gaz Okuma Özeti</h1>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Aksa RMS-A canlı istasyon tüketim, üst ısıl değer ve PDF rapor kontrol paneli
+              </p>
             </div>
-          </Col>
 
-          {/* OYS Period Info */}
-          <Col xl={4} lg={4} md={6}>
+            <div className="h-8 w-px bg-slate-200 hidden sm:block" />
+
+            {/* Date Stepper */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => handleStepDate(-1)}
+                disabled={fetchingAll}
+                className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 ring-1 ring-inset ring-slate-200 disabled:opacity-50 transition-colors cursor-pointer"
+                title="Önceki Gün"
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="rounded-xl border-0 py-1.5 px-3 text-xs font-bold text-slate-900 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-blue-600 outline-none"
+              />
+
+              <button
+                type="button"
+                onClick={() => handleStepDate(1)}
+                disabled={fetchingAll}
+                className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 ring-1 ring-inset ring-slate-200 disabled:opacity-50 transition-colors cursor-pointer"
+                title="Sonraki Gün"
+              >
+                <ChevronRight size={16} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedDate(getDefaultGasDate())}
+                disabled={fetchingAll}
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 ring-1 ring-inset ring-slate-200 transition-colors cursor-pointer"
+              >
+                Dün
+              </button>
+            </div>
+          </div>
+
+          {/* Right: OYS Period & Primary Buttons */}
+          <div className="flex flex-wrap items-center justify-between lg:justify-end gap-3">
             {gasInfo && (
-              <div className="bg-light p-2.5 px-3 rounded-3 border d-flex align-items-center gap-2.5">
-                <Clock size={20} className="text-primary flex-shrink-0" />
-                <div>
-                  <div className="text-muted fw-semibold" style={{ fontSize: '10.5px' }}>
-                    OYS 24 SAATLİK GAZ GÜNÜ ARALIĞI
-                  </div>
-                  <div className="fw-bold text-dark small">
-                    <span className="text-primary">{gasInfo.dt1}</span> &rarr; <span className="text-success">{gasInfo.dt3}</span>
-                  </div>
-                </div>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 ring-1 ring-inset ring-slate-200/80 text-xs">
+                <Clock size={14} className="text-blue-600 shrink-0" />
+                <span className="text-slate-500 font-medium hidden xl:inline">Gaz Günü:</span>
+                <span className="font-semibold text-slate-800">{gasInfo.dt1}</span>
+                <span className="text-slate-400">&rarr;</span>
+                <span className="font-semibold text-emerald-700">{gasInfo.dt3}</span>
               </div>
             )}
-          </Col>
 
-          {/* Primary Actions */}
-          <Col xl={4} lg={3} md={6} className="d-flex flex-wrap gap-2 justify-content-md-end">
-            <Button
-              variant="primary"
-              onClick={handleFetchAll}
-              disabled={fetchingAll || loading}
-              className="d-flex align-items-center justify-content-center gap-2 fw-bold px-3.5 py-2 shadow-sm flex-grow-1 flex-md-grow-0"
-            >
-              <RefreshCw size={17} className={fetchingAll ? 'spin' : ''} />
-              <span>{fetchingAll ? 'Sorgulanıyor...' : 'Canlı Veri Çek'}</span>
-            </Button>
+            <div className="flex items-center gap-2">
+              {readings.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAnalytics(!showAnalytics)}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold ring-1 ring-inset transition-all cursor-pointer ${
+                    showAnalytics
+                      ? 'bg-blue-50 text-blue-700 ring-blue-600/20'
+                      : 'bg-white text-slate-700 ring-slate-200 hover:bg-slate-50'
+                  }`}
+                  title="Tüketim Dağılım Grafiğini Göster/Gizle"
+                >
+                  <BarChart3 size={15} />
+                  <span className="hidden sm:inline">Analitik</span>
+                </button>
+              )}
 
-            <Button
-              variant="outline-success"
-              onClick={handleExportExcel}
-              disabled={readings.length === 0}
-              className="d-flex align-items-center justify-content-center gap-1.5 fw-semibold px-3 py-2"
-              title="Excel Raporu İndir"
-            >
-              <FileSpreadsheet size={17} />
-              <span>Excel</span>
-            </Button>
-          </Col>
-        </Row>
+              <button
+                type="button"
+                onClick={handleExportExcel}
+                disabled={readings.length === 0}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 ring-1 ring-inset ring-emerald-600/20 disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                <FileSpreadsheet size={15} />
+                <span>Excel</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleFetchAll}
+                disabled={fetchingAll || loading}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 shadow-2xs disabled:opacity-50 transition-all cursor-pointer"
+              >
+                <RefreshCw size={15} className={fetchingAll ? 'spin' : ''} />
+                <span>{fetchingAll ? 'Sorgulanıyor...' : 'Canlı Veri Çek'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Alert Messages */}
+      {/* Notification Banner */}
       {message && (
-        <Alert variant={message.type} dismissible onClose={() => setMessage(null)} className="shadow-sm rounded-3 mb-3">
-          {message.text}
-        </Alert>
+        <div
+          className={`rounded-xl p-3.5 text-xs font-medium flex items-center justify-between ring-1 ring-inset ${
+            message.type === 'success'
+              ? 'bg-emerald-50 text-emerald-800 ring-emerald-600/20'
+              : message.type === 'warning'
+              ? 'bg-amber-50 text-amber-800 ring-amber-600/20'
+              : 'bg-rose-50 text-rose-800 ring-rose-600/20'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <AlertCircle size={16} className="shrink-0" />
+            <span>{message.text}</span>
+          </div>
+          <button type="button" onClick={() => setMessage(null)} className="text-slate-400 hover:text-slate-600">
+            <X size={15} />
+          </button>
+        </div>
       )}
 
-      {/* Modern KPI Cards */}
-      <Row className="g-3 mb-3 mb-md-4">
-        <Col xl={3} md={6} sm={6} xs={12}>
-          <div className="kpi-card">
-            <div className="d-flex align-items-center justify-content-between">
-              <div>
-                <div className="text-muted small fw-bold text-uppercase" style={{ fontSize: '11px' }}>
-                  TOPLAM TÜKETİM (5 NOLU)
-                </div>
-                <div className="fs-3 fw-bolder text-primary mt-1 lh-sm">
-                  {totalConsumption.toLocaleString('tr-TR')}
-                  <small className="fs-6 fw-normal text-muted ms-1">Sm³</small>
-                </div>
-              </div>
-              <div className="kpi-icon-box bg-primary-subtle text-primary">
-                <Activity size={24} />
-              </div>
-            </div>
+      {/* Tremor 4-Column KPI Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {/* KPI 1: Total Consumption */}
+        <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-2xs p-5 flex flex-col justify-between min-w-0 overflow-hidden">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-slate-500 truncate">Toplam Düzeltilmiş Tüketim (5 Nolu)</span>
+            <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10 shrink-0">
+              Sm³
+            </span>
           </div>
-        </Col>
-
-        <Col xl={3} md={6} sm={6} xs={12}>
-          <div className="kpi-card">
-            <div className="d-flex align-items-center justify-content-between">
-              <div>
-                <div className="text-muted small fw-bold text-uppercase" style={{ fontSize: '11px' }}>
-                  TOPLAM ENERJİ (6 NOLU)
-                </div>
-                <div className="fs-3 fw-bolder text-info mt-1 lh-sm">
-                  {totalEnergy.toLocaleString('tr-TR')}
-                  <small className="fs-6 fw-normal text-muted ms-1">kcal</small>
-                </div>
-              </div>
-              <div className="kpi-icon-box bg-info-subtle text-info">
-                <Flame size={24} />
-              </div>
-            </div>
+          <div className="mt-2 flex flex-wrap items-baseline gap-1.5 min-w-0">
+            <span className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 tabular-nums break-all">
+              {totalConsumption.toLocaleString('tr-TR')}
+            </span>
+            <span className="text-xs font-medium text-slate-400 shrink-0">Sm³</span>
           </div>
-        </Col>
-
-        <Col xl={3} md={6} sm={6} xs={6}>
-          <div className="kpi-card">
-            <div className="d-flex align-items-center justify-content-between mb-2">
-              <div>
-                <div className="text-muted small fw-bold text-uppercase" style={{ fontSize: '11px' }}>
-                  ONAY TAMAMLANMA
-                </div>
-                <div className="fs-4 fw-bolder text-success mt-1 lh-sm">
-                  {approvedCount} / {readings.length}
-                  <small className="fs-6 fw-semibold text-muted ms-1">(%{approvalProgress})</small>
-                </div>
-              </div>
-              <div className="kpi-icon-box bg-success-subtle text-success d-none d-sm-flex">
-                <CheckCircle2 size={24} />
-              </div>
-            </div>
-            <ProgressBar 
-              now={approvalProgress} 
-              variant="success" 
-              style={{ height: '6px', borderRadius: '99px' }} 
-            />
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+            <span>Listelenen İstasyon</span>
+            <span className="font-semibold text-slate-700">{readings.length} İstasyon</span>
           </div>
-        </Col>
-
-        <Col xl={3} md={6} sm={6} xs={6}>
-          <div className="kpi-card">
-            <div className="d-flex align-items-center justify-content-between">
-              <div>
-                <div className="text-muted small fw-bold text-uppercase" style={{ fontSize: '11px' }}>
-                  DURUM ÖZETİ
-                </div>
-                <div className="d-flex align-items-center gap-3 mt-2">
-                  <div>
-                    <span className="fs-5 fw-bolder text-warning">{pendingCount}</span>
-                    <span className="text-muted small ms-1">Bekleyen</span>
-                  </div>
-                  <div className="vr" />
-                  <div>
-                    <span className="fs-5 fw-bolder text-danger">{deniedCount}</span>
-                    <span className="text-muted small ms-1">Red</span>
-                  </div>
-                </div>
-              </div>
-              <div className="kpi-icon-box bg-warning-subtle text-warning d-none d-sm-flex">
-                <AlertCircle size={24} />
-              </div>
-            </div>
-          </div>
-        </Col>
-      </Row>
-
-      {/* Main Dashboard Card: Quick Filters + Search + Responsive Table/Cards */}
-      <div className="dashboard-card overflow-hidden">
-        {/* Filter & Search Toolbar */}
-        <div className="p-3 p-md-4 border-bottom bg-white">
-          <Row className="align-items-center justify-content-between g-3">
-            <Col lg={7} md={12}>
-              <div className="d-flex flex-wrap align-items-center gap-2">
-                <button
-                  type="button"
-                  className={`filter-pill ${statusFilter === 'ALL' ? 'active' : ''}`}
-                  onClick={() => setStatusFilter('ALL')}
-                >
-                  <span>Tümü</span>
-                  <Badge bg={statusFilter === 'ALL' ? 'light' : 'secondary'} text={statusFilter === 'ALL' ? 'dark' : 'white'} pill>
-                    {readings.length}
-                  </Badge>
-                </button>
-
-                <button
-                  type="button"
-                  className={`filter-pill ${statusFilter === 'PENDING' ? 'active' : ''}`}
-                  onClick={() => setStatusFilter('PENDING')}
-                >
-                  <span>Kontrol Bekleyen</span>
-                  <Badge bg="warning" text="dark" pill>{pendingCount}</Badge>
-                </button>
-
-                <button
-                  type="button"
-                  className={`filter-pill ${statusFilter === 'APPROVED' ? 'active' : ''}`}
-                  onClick={() => setStatusFilter('APPROVED')}
-                >
-                  <span>Onaylanan</span>
-                  <Badge bg="success" pill>{approvedCount}</Badge>
-                </button>
-
-                <button
-                  type="button"
-                  className={`filter-pill ${statusFilter === 'DENIED' ? 'active' : ''}`}
-                  onClick={() => setStatusFilter('DENIED')}
-                >
-                  <span>Reddedilen</span>
-                  <Badge bg="danger" pill>{deniedCount}</Badge>
-                </button>
-
-                <button
-                  type="button"
-                  className={`filter-pill ${statusFilter === 'WITH_REPORT' ? 'active' : ''}`}
-                  onClick={() => setStatusFilter('WITH_REPORT')}
-                >
-                  <FileText size={14} />
-                  <span>PDF Raporlu</span>
-                  <Badge bg="info" pill>{withReportCount}</Badge>
-                </button>
-              </div>
-            </Col>
-
-            <Col lg={4} md={12}>
-              <InputGroup size="sm">
-                <InputGroup.Text className="bg-light border-end-0 text-muted">
-                  <Search size={16} />
-                </InputGroup.Text>
-                <Form.Control
-                  type="text"
-                  placeholder="İstasyon adı veya kullanıcı kodu ara..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="border-start-0 ps-0 py-2"
-                />
-              </InputGroup>
-            </Col>
-          </Row>
         </div>
 
-        {/* Loading or Empty State */}
+        {/* KPI 2: Total Energy */}
+        <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-2xs p-5 flex flex-col justify-between min-w-0 overflow-hidden">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-slate-500 truncate">Toplam Enerji Miktarı (6 Nolu)</span>
+            <span className="inline-flex items-center rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 ring-1 ring-inset ring-indigo-700/10 shrink-0">
+              kcal
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap items-baseline gap-1.5 min-w-0">
+            <span className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 tabular-nums break-all">
+              {totalEnergy.toLocaleString('tr-TR')}
+            </span>
+            <span className="text-xs font-medium text-slate-400 shrink-0">kcal</span>
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+            <span>Ort. Üst Isıl Değer (Ho)</span>
+            <span className="font-semibold text-slate-700 tabular-nums">
+              {readings.some(r => r.superiorHeatingValue)
+                ? Math.round(
+                    readings.reduce((acc, r) => acc + (Number(r.superiorHeatingValue) || 0), 0) /
+                      (readings.filter(r => r.superiorHeatingValue).length || 1)
+                  ).toLocaleString('tr-TR') + ' kcal/Sm³'
+                : '—'}
+            </span>
+          </div>
+        </div>
+
+        {/* KPI 3: Approval Progress (Tremor ProgressBar + CategoryBar style) */}
+        <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-2xs p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500">Onay & Doğrulama Oranı</span>
+            <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+              %{approvalProgress}
+            </span>
+          </div>
+          <div className="mt-2 flex items-baseline justify-between">
+            <span className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 tabular-nums">
+              {approvedCount} <span className="text-lg font-normal text-slate-400">/ {readings.length}</span>
+            </span>
+            <span className="text-xs text-emerald-600 font-medium">Onaylandı</span>
+          </div>
+          {/* Tremor ProgressBar */}
+          <div className="mt-3">
+            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden flex">
+              <div
+                className="bg-emerald-500 h-full transition-all duration-500"
+                style={{ width: `${approvalProgress}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* KPI 4: Status & Report Breakdown */}
+        <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-2xs p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500">Kontrol & Rapor Dağılımı</span>
+            <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
+              {withReportCount} PDF Rapor
+            </span>
+          </div>
+          <div className="mt-2 grid grid-cols-3 gap-2 pt-1">
+            <div className="bg-emerald-50/60 rounded-lg p-2 text-center ring-1 ring-inset ring-emerald-500/15">
+              <div className="text-lg font-bold text-emerald-700 tabular-nums leading-none">{approvedCount}</div>
+              <div className="text-[10px] font-medium text-emerald-600 mt-1">Onaylı</div>
+            </div>
+            <div className="bg-amber-50/60 rounded-lg p-2 text-center ring-1 ring-inset ring-amber-500/15">
+              <div className="text-lg font-bold text-amber-700 tabular-nums leading-none">{pendingCount}</div>
+              <div className="text-[10px] font-medium text-amber-600 mt-1">Bekleyen</div>
+            </div>
+            <div className="bg-rose-50/60 rounded-lg p-2 text-center ring-1 ring-inset ring-rose-500/15">
+              <div className="text-lg font-bold text-rose-700 tabular-nums leading-none">{deniedCount}</div>
+              <div className="text-[10px] font-medium text-rose-600 mt-1">Red</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tremor BarList Analytics Panel (Collapsible, shown when multiple stations exist) */}
+      {showAnalytics && readings.length > 1 && totalConsumption > 0 && (
+        <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-2xs p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">İstasyon Bazlı Tüketim Dağılımı (Tremor BarList)</h2>
+              <p className="text-xs text-slate-500">Seçili gaz günündeki düzeltilmiş tüketim (Sm³) karşılaştırması</p>
+            </div>
+            <span className="text-xs font-semibold text-slate-500">5 Nolu Tüketim (Sm³)</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2.5">
+            {[...readings]
+              .sort((a, b) => (Number(b.consumption) || 0) - (Number(a.consumption) || 0))
+              .map((r) => {
+                const val = Number(r.consumption) || 0;
+                const pct = Math.max(Math.round((val / maxStationConsumption) * 100), 2);
+                const sharePct = totalConsumption > 0 ? ((val / totalConsumption) * 100).toFixed(1) : '0.0';
+                return (
+                  <div key={r.u} className="group">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-800">{r.stationName}</span>
+                        <span className="text-[11px] text-slate-400 font-mono">({r.u})</span>
+                      </div>
+                      <div className="flex items-center gap-2 tabular-nums">
+                        <span className="font-bold text-slate-900">{val.toLocaleString('tr-TR')} Sm³</span>
+                        <span className="text-[11px] text-slate-400 w-11 text-right">%{sharePct}</span>
+                      </div>
+                    </div>
+                    <div className="w-full bg-slate-100 h-2 rounded-md overflow-hidden">
+                      <div
+                        className="bg-blue-500/85 group-hover:bg-blue-600 h-full rounded-md transition-all duration-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      {/* Main Tremor Table & Mobile Cards Container */}
+      <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-2xs overflow-hidden">
+        {/* Filter Tabs & Search Header */}
+        <div className="p-4 sm:px-6 border-b border-slate-200 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+          {/* Tremor TabList */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {[
+              { id: 'ALL', label: 'Tüm İstasyonlar', count: readings.length },
+              { id: 'PENDING', label: 'Kontrol Bekleyen', count: pendingCount },
+              { id: 'APPROVED', label: 'Onaylanan', count: approvedCount },
+              { id: 'DENIED', label: 'Reddedilen', count: deniedCount },
+              { id: 'WITH_REPORT', label: 'PDF Raporlu', count: withReportCount },
+              { id: 'SUBSTITUTED', label: 'İkame Veri Kullanan', count: substitutedCount }
+            ].map((tab) => {
+              const active = statusFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setStatusFilter(tab.id)}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    active
+                      ? 'bg-slate-900 text-white shadow-2xs'
+                      : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-lg text-[10px] tabular-nums ${
+                      active ? 'bg-white/20 text-white' : 'bg-white text-slate-700'
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Search Input */}
+          <div className="relative w-full lg:w-72">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+              <Search size={15} />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="İstasyon veya kullanıcı ara..."
+              className="w-full rounded-xl border-0 py-2 pl-9 pr-3 text-xs text-slate-900 ring-1 ring-inset ring-slate-200 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Content Body */}
         {loading || (fetchingAll && readings.length === 0) ? (
-          <div className="text-center py-5">
-            <Spinner animation="border" variant="primary" />
-            <div className="mt-3 text-muted fw-semibold">İstasyon verileri ve PDF raporları Aksa RMSA'dan çekiliyor...</div>
+          <div className="py-16 text-center">
+            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="mt-3 text-xs font-medium text-slate-500">
+              İstasyon verileri ve PDF raporları Aksa RMS-A üzerinden sorgulanıyor...
+            </p>
           </div>
         ) : filteredReadings.length === 0 ? (
-          <div className="text-center py-5 text-muted px-3">
-            Arama veya filtre kriterlerine uygun istasyon kaydı bulunamadı.
+          <div className="py-14 text-center text-xs text-slate-500">
+            Seçili filtre kriterlerine uygun istasyon kaydı bulunamadı.
           </div>
         ) : (
           <>
-            {/* DESKTOP VIEW: Modern Table (visible on md and up) */}
-            <div className="table-responsive d-none d-md-block">
-              <Table className="modern-table">
-                <thead>
+            {/* DESKTOP TREMOR TABLE (md and up) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200 text-left">
+                <thead className="bg-slate-50/80">
                   <tr>
-                    <th style={{ width: '48px' }}>#</th>
-                    <th>İstasyon Bilgisi</th>
-                    <th className="text-end">5 - Tüketim (Sm³)</th>
-                    <th className="text-end">6 - Enerji (kcal)</th>
-                    <th className="text-center">7 - Üst Isıl (Ho)</th>
-                    <th className="text-center">Basınç / Sıcaklık</th>
-                    <th className="text-center">Durum & Zaman</th>
-                    <th className="text-center">PDF Rapor / Belge</th>
-                    <th className="text-end" style={{ minWidth: '230px' }}>Kontrol & İşlemler</th>
+                    <th className="py-3 pl-6 pr-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 w-10">#</th>
+                    <th className="py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">İstasyon</th>
+                    <th className="py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-right">5 - Tüketim (Sm³)</th>
+                    <th className="py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-right">6 - Enerji (kcal)</th>
+                    <th className="py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-center">7 - Üst Isıl (Ho)</th>
+                    <th className="py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-center">Basınç / Sıcaklık</th>
+                    <th className="py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-center">Durum & Zaman</th>
+                    <th className="py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-center">Rapor / Belge</th>
+                    <th className="py-3 pl-3 pr-6 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-right">İşlemler</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100 bg-white text-sm">
                   {filteredReadings.map((reading, index) => {
                     const isApproved = reading.status === 'APPROVED';
                     const isDenied = reading.status === 'DENIED';
                     const isPending = reading.status === 'PENDING';
                     const hasFiles = reading.files && reading.files.length > 0;
                     const stationId = reading.stationId?._id || reading.stationId;
+                    const isSubstituted = checkIsSubstituted(reading);
 
                     return (
-                      <tr key={reading.u || index}>
-                        <td className="text-muted fw-semibold">{index + 1}</td>
-                        <td>
-                          <div className="d-flex align-items-center gap-2">
-                            <div>
-                              <div className="fw-bold text-dark">{reading.stationName}</div>
-                              <div className="d-flex align-items-center gap-2 mt-0.5">
-                                <code className="small text-secondary">{reading.u}</code>
-                                {reading.operatorNote && (
-                                  <span className="badge bg-info-subtle text-info-emphasis fw-normal" title={reading.operatorNote}>
-                                    📝 {reading.operatorNote.length > 32 ? reading.operatorNote.slice(0, 32) + '...' : reading.operatorNote}
-                                  </span>
-                                )}
-                              </div>
-                              {reading.fetchStatus?.errorMessage && (
-                                <div className="text-danger small mt-1" style={{ fontSize: '11px' }}>
-                                  ⚠️ {reading.fetchStatus.errorMessage}
-                                </div>
-                              )}
-                            </div>
-                          </div>
+                      <tr key={reading.u || index} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3.5 pl-6 pr-2 text-xs font-medium text-slate-400 tabular-nums">
+                          {index + 1}
                         </td>
 
-                        <td className="text-end">
-                          <span className="fw-bolder text-primary fs-6">
+                        <td className="py-3.5 px-3">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => openVerificationPage(reading)}
+                              className="font-semibold text-slate-900 hover:text-blue-600 text-xs sm:text-sm text-left transition-colors cursor-pointer"
+                            >
+                              {reading.stationName}
+                            </button>
+                            {isSubstituted && (
+                              <span
+                                className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 ring-1 ring-inset ring-amber-600/25"
+                                title={reading.operatorNote || 'GC olmaması / bakımda olması sebebiyle başka istasyonun ikame ısıl değeri kullanılmıştır (fld_SHVSelection: 0)'}
+                              >
+                                ⚠️ İkame Veri
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                            <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded">
+                              {reading.u}
+                            </span>
+                            {reading.operatorNote && (
+                              <span
+                                className="inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10"
+                                title={reading.operatorNote}
+                              >
+                                📝 {reading.operatorNote.length > 28 ? reading.operatorNote.slice(0, 28) + '...' : reading.operatorNote}
+                              </span>
+                            )}
+                          </div>
+                          {reading.fetchStatus?.errorMessage && (
+                            <div className="text-[11px] text-rose-600 mt-1">
+                              ⚠️ {reading.fetchStatus.errorMessage}
+                            </div>
+                          )}
+                        </td>
+
+                        <td className="py-3.5 px-3 text-right tabular-nums">
+                          <span className="font-bold text-slate-900">
                             {reading.consumption !== null && reading.consumption !== undefined
                               ? Number(reading.consumption).toLocaleString('tr-TR')
-                              : <span className="text-muted">—</span>}
+                              : <span className="text-slate-300">—</span>}
                           </span>
                         </td>
 
-                        <td className="text-end">
-                          <span className="fw-bold text-dark">
+                        <td className="py-3.5 px-3 text-right tabular-nums">
+                          <span className="font-semibold text-slate-700">
                             {reading.energy !== null && reading.energy !== undefined
                               ? Number(reading.energy).toLocaleString('tr-TR')
-                              : <span className="text-muted">—</span>}
+                              : <span className="text-slate-300">—</span>}
                           </span>
                         </td>
 
-                        <td className="text-center">
+                        <td className="py-3.5 px-3 text-center tabular-nums">
                           {reading.superiorHeatingValue !== null && reading.superiorHeatingValue !== undefined ? (
-                            <div>
-                              <span className="fw-bold text-dark">{Number(reading.superiorHeatingValue).toLocaleString('tr-TR')}</span>
-                              {reading.isSubstitutedSHV && (
-                                <div>
-                                  <Badge bg="info" className="px-1.5 py-0.5 mt-0.5" style={{ fontSize: '9px' }}>
-                                    İkame Ho (7 Nolu)
-                                  </Badge>
-                                </div>
+                            <div className="inline-flex flex-col items-center">
+                              <span className="font-semibold text-slate-900">
+                                {Number(reading.superiorHeatingValue).toLocaleString('tr-TR')}
+                              </span>
+                              {isSubstituted ? (
+                                <span
+                                  className="mt-1 inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800 ring-1 ring-inset ring-amber-600/25"
+                                  title="fld_OperatorSHVSelection: 0 / fld_SHVSelection: 0 — Başka istasyonun ısıl değeri (ikame veri) kullanılmıştır"
+                                >
+                                  ⚠️ İkame Isıl Değer
+                                </span>
+                              ) : (
+                                <span
+                                  className="mt-1 inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20"
+                                  title="fld_OperatorSHVSelection: 1 / fld_SHVSelection: 1 — İstasyonun kendi GC ısıl değeri kullanılmıştır"
+                                >
+                                  ✓ Kendi GC Verisi
+                                </span>
                               )}
                             </div>
-                          ) : '—'}
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
                         </td>
 
-                        <td className="text-center">
-                          <div className="small fw-semibold text-dark">
+                        <td className="py-3.5 px-3 text-center tabular-nums">
+                          <div className="text-xs font-semibold text-slate-800">
                             {reading.pressure !== null && reading.pressure !== undefined ? `${reading.pressure} Bar` : '—'}
                           </div>
-                          <div className="text-muted" style={{ fontSize: '11px' }}>
+                          <div className="text-[11px] text-slate-500">
                             {reading.temperature !== null && reading.temperature !== undefined ? `${reading.temperature} °C` : '—'}
                           </div>
                         </td>
 
-                        <td className="text-center">
+                        <td className="py-3.5 px-3 text-center">
                           {isApproved && (
-                            <div>
-                              <Badge bg="success" className="px-2.5 py-1 rounded-pill">ONAYLANDI</Badge>
+                            <div className="inline-flex flex-col items-center">
+                              <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                Onaylandı
+                              </span>
                               {reading.approvalInfo?.actionAt && (
-                                <div className="text-success fw-semibold mt-1" style={{ fontSize: '10px' }}>
+                                <span className="text-[10px] text-slate-500 mt-1 tabular-nums">
                                   {new Date(reading.approvalInfo.actionAt).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                  {reading.approvalInfo.actionBy && <div className="text-muted" style={{ fontSize: '9.5px' }}>({reading.approvalInfo.actionBy})</div>}
-                                </div>
+                                  {reading.approvalInfo.actionBy && ` (${reading.approvalInfo.actionBy})`}
+                                </span>
                               )}
                             </div>
                           )}
                           {isDenied && (
-                            <div>
-                              <Badge bg="danger" className="px-2.5 py-1 rounded-pill">REDDEDİLDİ</Badge>
+                            <div className="inline-flex flex-col items-center">
+                              <span className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 ring-1 ring-inset ring-rose-600/20">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                Reddedildi
+                              </span>
                               {reading.approvalInfo?.actionAt && (
-                                <div className="text-danger fw-semibold mt-1" style={{ fontSize: '10px' }}>
+                                <span className="text-[10px] text-slate-500 mt-1 tabular-nums">
                                   {new Date(reading.approvalInfo.actionAt).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                  {reading.approvalInfo.actionBy && <div className="text-muted" style={{ fontSize: '9.5px' }}>({reading.approvalInfo.actionBy})</div>}
-                                </div>
+                                  {reading.approvalInfo.actionBy && ` (${reading.approvalInfo.actionBy})`}
+                                </span>
                               )}
                             </div>
                           )}
                           {isPending && (
-                            reading.fetchStatus?.isFetched 
-                              ? <Badge bg="warning" text="dark" className="px-2.5 py-1 rounded-pill">KONTROL BEKLİYOR</Badge>
-                              : <Badge bg="secondary" className="px-2.5 py-1 rounded-pill">VERİ BEKLENİYOR</Badge>
+                            <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                              {reading.fetchStatus?.isFetched ? 'Kontrol Bekliyor' : 'Veri Bekleniyor'}
+                            </span>
                           )}
                         </td>
 
-                        <td className="text-center">
-                          <div className="d-inline-flex align-items-center gap-1">
+                        <td className="py-3.5 px-3 text-center">
+                          <div className="inline-flex items-center gap-1.5">
                             {hasFiles ? (
                               <>
-                                <Button
-                                  variant="primary"
-                                  size="sm"
-                                  className="px-2.5 py-1 d-inline-flex align-items-center gap-1 shadow-sm"
-                                  onClick={() => setDetailModalData(reading)}
+                                <button
+                                  type="button"
+                                  onClick={() => openVerificationPage(reading)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 ring-1 ring-inset ring-blue-600/20 transition-colors cursor-pointer"
                                   title="PDF Raporu ve Verileri Yan Yana İncele"
                                 >
-                                  <FileText size={14} />
-                                  <span className="small fw-semibold">{reading.files.length} Rapor</span>
-                                </Button>
-                                <Button
-                                  variant="light"
-                                  size="sm"
-                                  className="p-1 border"
-                                  onClick={() => setUploadModalData(reading)}
-                                  title="Ek Dosya Yükle / Yönet"
+                                  <FileText size={13} />
+                                  <span>{reading.files.length} Rapor</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openVerificationPage(reading)}
+                                  className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 ring-1 ring-inset ring-slate-200 transition-colors cursor-pointer"
+                                  title="Yeni Dosya Ekle"
                                 >
                                   <Upload size={13} />
-                                </Button>
+                                </button>
                               </>
                             ) : (
-                              <Button
-                                variant="outline-secondary"
-                                size="sm"
-                                className="px-2.5 py-1 d-inline-flex align-items-center gap-1"
-                                onClick={() => setUploadModalData(reading)}
-                                title="Rapor Dosyası Yükle"
+                              <button
+                                type="button"
+                                onClick={() => openVerificationPage(reading)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-slate-600 bg-white hover:bg-slate-50 ring-1 ring-inset ring-slate-200 transition-colors cursor-pointer"
                               >
-                                <Upload size={14} />
-                                <span className="small">Dosya Yükle</span>
-                              </Button>
+                                <Upload size={13} />
+                                <span>Yükle</span>
+                              </button>
                             )}
                           </div>
                         </td>
 
-                        <td className="text-end">
-                          <div className="d-inline-flex align-items-center justify-content-end gap-1.5">
-                            <Button
-                              variant="light"
-                              size="sm"
-                              className="p-1.5 border text-info"
-                              onClick={() => setDetailModalData(reading)}
-                              title="Detay & Karşılaştırma Ekranı"
+                        <td className="py-3.5 pl-3 pr-6 text-right">
+                          <div className="inline-flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => openVerificationPage(reading)}
+                              className="p-2 rounded-xl text-slate-600 hover:text-blue-600 hover:bg-blue-50 ring-1 ring-inset ring-slate-200 transition-colors cursor-pointer"
+                              title="Detay & Karşılaştırma Sayfasına Git"
                             >
-                              <Eye size={16} />
-                            </Button>
+                              <Eye size={15} />
+                            </button>
 
-                            <Button
-                              variant="light"
-                              size="sm"
-                              className="p-1.5 border text-dark"
+                            <button
+                              type="button"
                               disabled={fetchingSingleId === stationId}
                               onClick={() => handleFetchSingle(reading)}
+                              className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 ring-1 ring-inset ring-slate-200 disabled:opacity-50 transition-colors cursor-pointer"
                               title="Bu İstasyonu Tekrar Çek"
                             >
-                              <RefreshCw size={16} className={fetchingSingleId === stationId ? 'spin' : ''} />
-                            </Button>
+                              <RefreshCw size={15} className={fetchingSingleId === stationId ? 'spin' : ''} />
+                            </button>
 
-                            <Button
-                              variant="success"
-                              size="sm"
-                              disabled={isApproved || actionLoading}
-                              className="d-inline-flex align-items-center gap-1 px-2.5 py-1.5 fw-semibold shadow-sm"
-                              onClick={() => setConfirmModalData(reading)}
+                            <button
+                              type="button"
+                              onClick={() => openVerificationPage(reading)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 shadow-2xs transition-colors cursor-pointer"
                             >
-                              <CheckCircle2 size={15} />
-                              <span>{isApproved ? 'Onaylı' : 'Onayla'}</span>
-                            </Button>
+                              <Check size={14} />
+                              <span>{isApproved ? 'İncele / Onaylı' : 'Kontrol Et & Onayla'}</span>
+                            </button>
 
-                            <Button
-                              variant="outline-danger"
-                              size="sm"
-                              disabled={isDenied || actionLoading}
-                              className="d-inline-flex align-items-center gap-1 px-2 py-1.5"
-                              onClick={() => setDenyModalData(reading)}
+                            <button
+                              type="button"
+                              disabled={isDenied}
+                              onClick={() => openVerificationPage(reading, true)}
+                              className="p-2 rounded-xl text-rose-600 hover:bg-rose-50 ring-1 ring-inset ring-rose-200 disabled:opacity-40 transition-colors cursor-pointer"
                               title="Reddet"
                             >
                               <XCircle size={15} />
-                            </Button>
+                            </button>
                           </div>
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
-              </Table>
+              </table>
             </div>
 
-            {/* MOBILE & TABLET VIEW: Interactive Cards (visible below md) */}
-            <div className="d-md-none p-3 bg-light">
+            {/* MOBILE TREMOR CARDS (below md) */}
+            <div className="md:hidden divide-y divide-slate-200">
               {filteredReadings.map((reading, index) => {
                 const isApproved = reading.status === 'APPROVED';
                 const isDenied = reading.status === 'DENIED';
                 const hasFiles = reading.files && reading.files.length > 0;
                 const stationId = reading.stationId?._id || reading.stationId;
-                const statusClass = isApproved ? 'status-approved' : isDenied ? 'status-denied' : 'status-pending';
 
                 return (
-                  <div key={reading.u || index} className={`mobile-station-card ${statusClass}`}>
-                    {/* Card Header */}
-                    <div className="d-flex justify-content-between align-items-start mb-2">
+                  <div key={reading.u || index} className="p-4 bg-white space-y-3">
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="fw-bolder text-dark fs-6">{reading.stationName}</div>
-                        <div className="text-muted small">
-                          Kod: <code>{reading.u}</code> • {reading.gasDate}
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => openVerificationPage(reading)}
+                          className="text-sm font-bold text-slate-900 hover:text-blue-600 text-left"
+                        >
+                          {reading.stationName}
+                        </button>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">{reading.u}</span>
+                          <span className="mx-1.5">•</span>
+                          <span>{reading.gasDate}</span>
+                        </p>
                       </div>
-                      <div className="text-end">
-                        {isApproved && <Badge bg="success" pill>ONAYLANDI</Badge>}
-                        {isDenied && <Badge bg="danger" pill>REDDEDİLDİ</Badge>}
-                        {!isApproved && !isDenied && <Badge bg="warning" text="dark" pill>BEKLEMEDE</Badge>}
-                      </div>
+                      {isApproved && (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                          Onaylandı
+                        </span>
+                      )}
+                      {isDenied && (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 ring-1 ring-inset ring-rose-600/20">
+                          Reddedildi
+                        </span>
+                      )}
+                      {!isApproved && !isDenied && (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20">
+                          Beklemede
+                        </span>
+                      )}
                     </div>
 
-                    {/* 2x2 Metric Grid */}
-                    <div className="mobile-metric-grid">
-                      <div className="mobile-metric-item">
-                        <div className="text-muted" style={{ fontSize: '10.5px', fontWeight: 600 }}>5-TÜKETİM (Sm³)</div>
-                        <div className="fw-bolder text-primary fs-6 mt-0.5">
+                    {/* 2x2 Tremor Metric Grid */}
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="bg-slate-50 rounded-xl p-3 ring-1 ring-inset ring-slate-200/70">
+                        <span className="text-[10px] font-semibold uppercase text-slate-500 block">5-Tüketim (Sm³)</span>
+                        <span className="text-sm font-bold text-slate-900 tabular-nums mt-0.5 block">
                           {reading.consumption !== null && reading.consumption !== undefined
                             ? Number(reading.consumption).toLocaleString('tr-TR')
                             : '—'}
-                        </div>
+                        </span>
                       </div>
 
-                      <div className="mobile-metric-item">
-                        <div className="text-muted" style={{ fontSize: '10.5px', fontWeight: 600 }}>6-ENERJİ (kcal)</div>
-                        <div className="fw-bold text-success fs-6 mt-0.5">
+                      <div className="bg-slate-50 rounded-xl p-3 ring-1 ring-inset ring-slate-200/70">
+                        <span className="text-[10px] font-semibold uppercase text-slate-500 block">6-Enerji (kcal)</span>
+                        <span className="text-sm font-bold text-slate-900 tabular-nums mt-0.5 block">
                           {reading.energy !== null && reading.energy !== undefined
                             ? Number(reading.energy).toLocaleString('tr-TR')
                             : '—'}
-                        </div>
+                        </span>
                       </div>
 
-                      <div className="mobile-metric-item">
-                        <div className="text-muted" style={{ fontSize: '10.5px', fontWeight: 600 }}>7-ÜST ISIL (Ho)</div>
-                        <div className="fw-bold text-dark mt-0.5">
+                      <div className="bg-slate-50 rounded-xl p-3 ring-1 ring-inset ring-slate-200/70">
+                        <span className="text-[10px] font-semibold uppercase text-slate-500 block">7-Üst Isıl (Ho)</span>
+                        <span className="text-sm font-bold text-slate-900 tabular-nums mt-0.5 block">
                           {reading.superiorHeatingValue !== null && reading.superiorHeatingValue !== undefined
                             ? Number(reading.superiorHeatingValue).toLocaleString('tr-TR')
                             : '—'}
-                        </div>
+                        </span>
+                        {reading.superiorHeatingValue !== null && reading.superiorHeatingValue !== undefined && (
+                          checkIsSubstituted(reading) ? (
+                            <span className="mt-1 inline-flex items-center rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 ring-1 ring-inset ring-amber-600/25">
+                              ⚠️ İkame Veri
+                            </span>
+                          ) : (
+                            <span className="mt-1 inline-flex items-center rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                              ✓ Kendi GC
+                            </span>
+                          )
+                        )}
                       </div>
 
-                      <div className="mobile-metric-item">
-                        <div className="text-muted" style={{ fontSize: '10.5px', fontWeight: 600 }}>BASINÇ / SICAKLIK</div>
-                        <div className="fw-semibold text-dark small mt-1">
+                      <div className="bg-slate-50 rounded-xl p-3 ring-1 ring-inset ring-slate-200/70">
+                        <span className="text-[10px] font-semibold uppercase text-slate-500 block">Basınç / Sıcaklık</span>
+                        <span className="text-xs font-semibold text-slate-800 tabular-nums mt-1 block">
                           {reading.pressure ?? '—'} Bar / {reading.temperature ?? '—'} °C
-                        </div>
+                        </span>
                       </div>
                     </div>
 
                     {reading.operatorNote && (
-                      <div className="bg-info-subtle text-info-emphasis p-2 rounded-2 small mb-2">
+                      <div className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800 ring-1 ring-inset ring-blue-600/20">
                         📝 {reading.operatorNote}
                       </div>
                     )}
 
                     {reading.approvalInfo?.actionAt && (
-                      <div className="text-muted small mb-2" style={{ fontSize: '11px' }}>
+                      <div className="text-[11px] text-slate-500">
                         ⏱️ İşlem: {new Date(reading.approvalInfo.actionAt).toLocaleString('tr-TR')} ({reading.approvalInfo.actionBy})
                       </div>
                     )}
 
-                    {/* Mobile Action Buttons */}
-                    <div className="d-flex flex-wrap gap-2 pt-2 border-top">
-                      <Button
-                        variant={hasFiles ? 'primary' : 'outline-info'}
-                        size="sm"
-                        className="flex-grow-1 d-flex align-items-center justify-content-center gap-1 py-2"
-                        onClick={() => setDetailModalData(reading)}
+                    {/* Action Bar */}
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => openVerificationPage(reading)}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-blue-700 bg-blue-50 ring-1 ring-inset ring-blue-600/20"
                       >
-                        <Eye size={15} />
+                        <Eye size={14} />
                         <span>{hasFiles ? `Rapor & İncele (${reading.files.length})` : 'İncele'}</span>
-                      </Button>
+                      </button>
 
-                      <Button
-                        variant="outline-secondary"
-                        size="sm"
-                        className="d-flex align-items-center justify-content-center gap-1 px-2.5 py-2"
-                        onClick={() => setUploadModalData(reading)}
+                      <button
+                        type="button"
+                        onClick={() => openVerificationPage(reading)}
+                        className="p-2 rounded-xl text-slate-600 bg-slate-100 ring-1 ring-inset ring-slate-200"
+                        title="Dosya Yükle"
                       >
                         <Upload size={15} />
-                      </Button>
+                      </button>
 
-                      <Button
-                        variant="outline-dark"
-                        size="sm"
-                        className="d-flex align-items-center justify-content-center px-2.5 py-2"
+                      <button
+                        type="button"
                         disabled={fetchingSingleId === stationId}
                         onClick={() => handleFetchSingle(reading)}
+                        className="p-2 rounded-xl text-slate-600 bg-slate-100 ring-1 ring-inset ring-slate-200"
                       >
                         <RefreshCw size={15} className={fetchingSingleId === stationId ? 'spin' : ''} />
-                      </Button>
+                      </button>
 
-                      <Button
-                        variant="success"
-                        size="sm"
-                        disabled={isApproved || actionLoading}
-                        className="flex-grow-1 d-flex align-items-center justify-content-center gap-1 py-2 fw-bold"
-                        onClick={() => setConfirmModalData(reading)}
+                      <button
+                        type="button"
+                        onClick={() => openVerificationPage(reading)}
+                        className="flex-1 inline-flex items-center justify-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-emerald-600"
                       >
-                        <CheckCircle2 size={15} />
+                        <Check size={14} />
                         <span>{isApproved ? 'Onaylı' : 'Onayla'}</span>
-                      </Button>
+                      </button>
 
-                      <Button
-                        variant="outline-danger"
-                        size="sm"
-                        disabled={isDenied || actionLoading}
-                        className="d-flex align-items-center justify-content-center px-2.5 py-2"
-                        onClick={() => setDenyModalData(reading)}
+                      <button
+                        type="button"
+                        disabled={isDenied}
+                        onClick={() => openVerificationPage(reading, true)}
+                        className="p-2 rounded-xl text-rose-600 bg-rose-50 ring-1 ring-inset ring-rose-500/20 disabled:opacity-40"
                       >
                         <XCircle size={15} />
-                      </Button>
+                      </button>
                     </div>
                   </div>
                 );
@@ -827,37 +940,6 @@ export default function DailyReadingsPage() {
           </>
         )}
       </div>
-
-      {/* Modals */}
-      <ConfirmModal
-        show={!!confirmModalData}
-        onHide={() => setConfirmModalData(null)}
-        reading={confirmModalData}
-        onConfirm={handleApprove}
-        loading={actionLoading}
-      />
-
-      <DenyReasonModal
-        show={!!denyModalData}
-        onHide={() => setDenyModalData(null)}
-        reading={denyModalData}
-        onDeny={handleDeny}
-        loading={actionLoading}
-      />
-
-      <FileUploadModal
-        show={!!uploadModalData}
-        onHide={() => setUploadModalData(null)}
-        reading={uploadModalData}
-        onFilesUpdated={handleFilesUpdated}
-      />
-
-      <ReadingDetailModal
-        show={!!detailModalData}
-        onHide={() => setDetailModalData(null)}
-        reading={detailModalData}
-        onReadingUpdated={handleFilesUpdated}
-      />
     </div>
   );
 }

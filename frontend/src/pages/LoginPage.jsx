@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Form, Button, Alert, Container, Row, Col, Spinner } from 'react-bootstrap';
-import { Flame, Lock, User, KeyRound } from 'lucide-react';
+import { Lock, User, KeyRound, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage() {
@@ -25,89 +24,103 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-vh-100 d-flex align-items-center justify-content-center bg-dark py-5">
-      <Container>
-        <Row className="justify-content-center">
-          <Col md={6} lg={5} xl={4}>
-            <div className="text-center mb-4">
-              <div className="bg-warning text-dark p-3 rounded-circle d-inline-flex mb-3 shadow">
-                <Flame size={48} />
+    <div className="min-h-screen flex flex-col justify-center items-center bg-slate-50 px-4 py-12">
+      <div className="w-full max-w-md">
+        {/* Brand Header */}
+        <div className="text-center mb-8">
+          <img
+            src="/logo.svg"
+            alt="Aksa Doğalgaz"
+            className="h-14 w-auto mx-auto mb-4"
+          />
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Gaz Alım Takip Sistemi</h1>
+          <p className="text-sm text-slate-500 mt-1">Aksa RMS-A İstasyon Sayaç & Belge Kontrol Platformu</p>
+        </div>
+
+        {/* Tremor Card */}
+        <div className="bg-white rounded-2xl ring-1 ring-slate-200 shadow-sm p-6 sm:p-8">
+          <div className="mb-6">
+            <h2 className="text-base font-semibold text-slate-900">Hesabınıza Giriş Yapın</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Yetkili kullanıcı adı ve şifrenizi giriniz</p>
+          </div>
+
+          {error && (
+            <div className="mb-5 rounded-xl bg-rose-50 p-3.5 text-xs font-medium text-rose-700 ring-1 ring-inset ring-rose-600/20 flex items-center gap-2.5">
+              <AlertCircle size={16} className="text-rose-600 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                Kullanıcı Adı
+              </label>
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                  <User size={16} />
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Örn: admin veya kepez"
+                  className="w-full rounded-xl border-0 py-2.5 pl-9 pr-3 text-sm text-slate-900 ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 outline-none transition-all"
+                />
               </div>
-              <h2 className="text-white fw-bold mb-1">Gaz Alım Takip</h2>
-              <p className="text-secondary small">İstasyon Sayaç & Gaz Tüketim Yönetim Sistemi</p>
             </div>
 
-            <Card className="shadow-lg border-0 rounded-4">
-              <Card.Body className="p-4 p-md-5">
-                <h4 className="fw-bold text-dark mb-4 text-center">Sisteme Giriş</h4>
-
-                {error && <Alert variant="danger" className="py-2 small mb-3">{error}</Alert>}
-
-                <Form onSubmit={handleSubmit}>
-                  <Form.Group className="mb-3">
-                    <Form.Label className="small fw-semibold text-muted">Kullanıcı Adı</Form.Label>
-                    <div className="input-group">
-                      <span className="input-group-text bg-light border-end-0">
-                        <User size={18} className="text-muted" />
-                      </span>
-                      <Form.Control
-                        type="text"
-                        required
-                        className="border-start-0 ps-0"
-                        placeholder="Kullanıcı adınızı girin"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                      />
-                    </div>
-                  </Form.Group>
-
-                  <Form.Group className="mb-4">
-                    <Form.Label className="small fw-semibold text-muted">Şifre</Form.Label>
-                    <div className="input-group">
-                      <span className="input-group-text bg-light border-end-0">
-                        <Lock size={18} className="text-muted" />
-                      </span>
-                      <Form.Control
-                        type="password"
-                        required
-                        className="border-start-0 ps-0"
-                        placeholder="Şifrenizi girin"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                      />
-                    </div>
-                  </Form.Group>
-
-                  <Button
-                    type="submit"
-                    variant="warning"
-                    size="lg"
-                    disabled={loading}
-                    className="w-100 fw-bold d-flex align-items-center justify-content-center gap-2 py-2.5 shadow-sm"
-                  >
-                    {loading ? (
-                      <>
-                        <Spinner size="sm" animation="border" />
-                        <span>Giriş Yapılıyor...</span>
-                      </>
-                    ) : (
-                      <>
-                        <KeyRound size={20} />
-                        <span>Giriş Yap</span>
-                      </>
-                    )}
-                  </Button>
-                </Form>
-
-                <div className="mt-4 pt-3 border-top text-center text-muted" style={{ fontSize: '11px' }}>
-                  <div><strong>Yönetici (Tüm İstasyonlar):</strong> <code>admin</code> / <code>admin123</code></div>
-                  <div className="mt-1"><strong>İstasyon Girişleri (Tek İstasyon):</strong> <code>kepez</code> / <code>kepez123</code>, <code>ezine2</code> / <code>ezine2123</code>, <code>can</code> / <code>can123</code> vb.</div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                Şifre
+              </label>
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                  <Lock size={16} />
                 </div>
-              </Card.Body>
-            </Card>
-          </Col>
-        </Row>
-      </Container>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full rounded-xl border-0 py-2.5 pl-9 pr-3 text-sm text-slate-900 ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-blue-600 outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-blue-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50 transition-all cursor-pointer"
+            >
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Giriş Yapılıyor...</span>
+                </>
+              ) : (
+                <>
+                  <KeyRound size={17} />
+                  <span>Sisteme Giriş Yap</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="mt-6 pt-5 border-t border-slate-100 text-[11px] text-slate-500 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-slate-600">Yönetici (Tüm İstasyonlar):</span>
+              <code className="bg-slate-100 px-2 py-0.5 rounded text-slate-800 font-mono">admin / admin123</code>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-slate-600">İstasyon Operatörleri:</span>
+              <code className="bg-slate-100 px-2 py-0.5 rounded text-slate-800 font-mono">kepez / kepez123, ezine2...</code>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

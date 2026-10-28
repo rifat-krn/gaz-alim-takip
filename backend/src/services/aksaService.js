@@ -81,11 +81,11 @@ async function fetchStationGasData(u, p, targetGasDay = null) {
       let superiorHeatingValue = null;
       const opSHV = d[7] !== undefined && d[7] !== null && d[7] !== '' 
         ? Number(d[7]) 
-        : (d.fld_OperatorSuperiorHeatingValue !== undefined ? Number(d.fld_OperatorSuperiorHeatingValue) : null);
+        : (d.fld_OperatorSuperiorHeatingValue !== undefined && d.fld_OperatorSuperiorHeatingValue !== null ? Number(d.fld_OperatorSuperiorHeatingValue) : null);
       
       const totSHV = d[30] !== undefined && d[30] !== null && d[30] !== ''
         ? Number(d[30])
-        : (d.fld_StationTotalSuperiorHeatingValue !== undefined ? Number(d.fld_StationTotalSuperiorHeatingValue) : null);
+        : (d.fld_StationTotalSuperiorHeatingValue !== undefined && d.fld_StationTotalSuperiorHeatingValue !== null ? Number(d.fld_StationTotalSuperiorHeatingValue) : null);
 
       if (opSHV !== null && !isNaN(opSHV) && opSHV > 0) {
         superiorHeatingValue = opSHV;
@@ -93,10 +93,24 @@ async function fetchStationGasData(u, p, targetGasDay = null) {
         superiorHeatingValue = totSHV;
       }
 
-      const isSubstitutedSHV = (opSHV !== null && totSHV !== null && Math.abs(opSHV - totSHV) > 0.01) || 
-                              d.fld_OperatorSHVSelection === 0 || 
-                              d.fld_SHVSelection === 0 || 
-                              !!d[23];
+      const opShvSel = d.fld_OperatorSHVSelection !== undefined && d.fld_OperatorSHVSelection !== null
+        ? Number(d.fld_OperatorSHVSelection)
+        : (d[25] !== undefined && d[25] !== null ? Number(d[25]) : null);
+      const dataShvSel = d.fld_SHVSelection !== undefined && d.fld_SHVSelection !== null
+        ? Number(d.fld_SHVSelection)
+        : (d[36] !== undefined && d[36] !== null ? Number(d[36]) : null);
+      const orgShvSel = st.fld_OrganizationSHVSelection !== undefined && st.fld_OrganizationSHVSelection !== null
+        ? Number(st.fld_OrganizationSHVSelection)
+        : (st[33] !== undefined && st[33] !== null ? Number(st[33]) : null);
+      const gcOrgId = d.fld_GCOrganizationId !== undefined && d.fld_GCOrganizationId !== null
+        ? Number(d.fld_GCOrganizationId)
+        : (d[35] !== undefined && d[35] !== null ? Number(d[35]) : -1);
+
+      const isSubstitutedSHV =
+        opShvSel === 0 ||
+        dataShvSel === 0 ||
+        orgShvSel === 0 ||
+        (gcOrgId !== null && !isNaN(gcOrgId) && gcOrgId > 0);
 
       // 3. Enerji (6 nolu veri - kcal cinsinden)
       let energy = null;

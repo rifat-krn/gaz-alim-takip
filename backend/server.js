@@ -7,6 +7,7 @@ require('dotenv').config();
 const connectDB = require('./src/config/db');
 const { seedDefaultAdminAndStationUsers } = require('./src/controllers/authController');
 const { syncStationsFromJson } = require('./src/services/stationSyncService');
+const { initDailyCheckScheduler } = require('./src/services/dailyReportCheckService');
 const Station = require('./src/models/Station');
 
 // Initialize Express App
@@ -24,6 +25,9 @@ connectDB().then(async () => {
 
   // Seed Default Admin & Station Users
   await seedDefaultAdminAndStationUsers();
+
+  // Initialize Daily Report Approval Check & Email Scheduler (runs once a day)
+  await initDailyCheckScheduler();
 });
 
 // Middleware

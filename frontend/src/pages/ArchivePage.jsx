@@ -1,16 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Table, Button, Badge, Form, Row, Col, Spinner, Alert } from 'react-bootstrap';
 import { 
   History, Search, FileSpreadsheet, Eye, FileText, RefreshCw, 
-  Activity, Flame, Calendar, Upload 
+  Upload, AlertCircle, X
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import api from '../api/axiosClient';
 import { useAuth } from '../context/AuthContext';
-import ReadingDetailModal from '../components/ReadingDetailModal';
-import FileUploadModal from '../components/FileUploadModal';
+import ReadingVerificationPage from './ReadingVerificationPage';
 
-// Helper to get default start of month and yesterday
 const getDefaultDates = () => {
   const d = new Date();
   d.setDate(d.getDate() - 1);
@@ -35,8 +32,7 @@ export default function ArchivePage() {
   const [endDate, setEndDate] = useState(endStr);
   const [message, setMessage] = useState(null);
 
-  const [detailModalData, setDetailModalData] = useState(null);
-  const [uploadModalData, setUploadModalData] = useState(null);
+  const [activeReadingPage, setActiveReadingPage] = useState(null);
 
   useEffect(() => {
     api.get('/stations').then((res) => {
@@ -66,7 +62,6 @@ export default function ArchivePage() {
     }
   };
 
-  // Fetch all days in the selected date range live from Aksa RMSA
   const handleFetchLiveRange = async () => {
     if (!startDate || !endDate) {
       setMessage({ type: 'warning', text: 'Lütfen başlangıç ve bitiş tarihlerini seçiniz.' });
@@ -121,49 +116,60 @@ export default function ArchivePage() {
   const totalPeriodSm3 = history.reduce((sum, r) => sum + (Number(r.consumption) || 0), 0);
   const totalPeriodEnergyKcal = history.reduce((sum, r) => sum + (Number(r.energy) || 0), 0);
 
+  if (activeReadingPage) {
+    return (
+      <ReadingVerificationPage
+        reading={activeReadingPage}
+        onBack={() => setActiveReadingPage(null)}
+        onReadingUpdated={(updated) => {
+          setHistory(prev => prev.map(h => (h._id === updated._id ? updated : h)));
+          setActiveReadingPage(updated);
+        }}
+      />
+    );
+  }
+
   return (
-    <div>
-      {/* Filter Header Card */}
-      <div className="dashboard-card p-3 p-md-4 mb-3 mb-md-4">
-        <div className="d-flex align-items-center gap-2.5 mb-3">
-          <div className="bg-primary-subtle text-primary p-2 rounded-3">
-            <History size={22} />
-          </div>
-          <div>
-            <h5 className="fw-bold mb-0 text-dark">Geçmiş Okuma Arşivi & Raporlar</h5>
-            <small className="text-muted">
-              {isAdmin 
-                ? 'Tüm istasyonlar için tarih aralıklı geçmiş sorgulama ve Aksa canlı veri çekme' 
-                : `${user?.assignedStation?.name || user?.stationU?.toUpperCase() || ''} İstasyonu Geçmiş Kayıtları`}
-            </small>
-          </div>
+    <div className="space-y-5">
+      {/* Tremor Filter Header Card */}
+      <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-2xs p-4 sm:p-5">
+        <div className="mb-4">
+          <h1 className="text-lg font-bold text-slate-900 tracking-tight">Geçmiş Okuma Arşivi & Raporlar</h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {isAdmin 
+              ? 'Tüm istasyonlar için tarih aralıklı geçmiş sorgulama ve Aksa RMS-A canlı veri çekme' 
+              : `${user?.assignedStation?.name || user?.stationU?.toUpperCase() || ''} İstasyonu Geçmiş Kayıtları`}
+          </p>
         </div>
 
-        <Row className="g-3 align-items-end">
-          <Col lg={2} md={3} sm={6} xs={6}>
-            <Form.Label className="small fw-bold text-muted mb-1">Başlangıç Tarihi</Form.Label>
-            <Form.Control
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-end">
+          <div className="lg:col-span-2">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Başlangıç Tarihi</label>
+            <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
+              className="w-full rounded-lg border-0 py-2 px-3 text-xs font-semibold text-slate-900 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-blue-600 outline-none"
             />
-          </Col>
+          </div>
 
-          <Col lg={2} md={3} sm={6} xs={6}>
-            <Form.Label className="small fw-bold text-muted mb-1">Bitiş Tarihi</Form.Label>
-            <Form.Control
+          <div className="lg:col-span-2">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Bitiş Tarihi</label>
+            <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
+              className="w-full rounded-lg border-0 py-2 px-3 text-xs font-semibold text-slate-900 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-blue-600 outline-none"
             />
-          </Col>
+          </div>
 
-          <Col lg={2} md={3} sm={6} xs={12}>
-            <Form.Label className="small fw-bold text-muted mb-1">İstasyon</Form.Label>
-            <Form.Select
+          <div className="lg:col-span-3">
+            <label className="block text-xs font-medium text-slate-600 mb-1">İstasyon</label>
+            <select
               value={!isAdmin && user?.stationU ? user.stationU : selectedStation}
               onChange={(e) => setSelectedStation(e.target.value)}
               disabled={!isAdmin && !!user?.stationU}
+              className="w-full rounded-lg border-0 py-2 px-3 text-xs font-semibold text-slate-900 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-blue-600 outline-none bg-white disabled:bg-slate-50"
             >
               {isAdmin && <option value="">Tüm İstasyonlar</option>}
               {stations
@@ -171,340 +177,325 @@ export default function ArchivePage() {
                 .map((st) => (
                   <option key={st._id} value={st.u}>{st.name}</option>
                 ))}
-            </Form.Select>
-          </Col>
+            </select>
+          </div>
 
-          <Col lg={2} md={3} sm={6} xs={12}>
-            <Form.Label className="small fw-bold text-muted mb-1">Onay Durumu</Form.Label>
-            <Form.Select
+          <div className="lg:col-span-2">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Onay Durumu</label>
+            <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full rounded-lg border-0 py-2 px-3 text-xs font-semibold text-slate-900 ring-1 ring-inset ring-slate-200 focus:ring-2 focus:ring-blue-600 outline-none bg-white"
             >
               <option value="">Tümü</option>
               <option value="APPROVED">Onaylanan</option>
               <option value="PENDING">Beklemede</option>
               <option value="DENIED">Reddedilen</option>
-            </Form.Select>
-          </Col>
+            </select>
+          </div>
 
-          <Col lg={4} md={12} className="d-flex flex-wrap gap-2 justify-content-lg-end">
-            <Button
-              variant="outline-primary"
+          <div className="sm:col-span-2 lg:col-span-3 flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
               onClick={fetchHistory}
               disabled={loading || fetchingLive}
-              className="d-flex align-items-center justify-content-center gap-1.5 px-3 py-2 flex-grow-1 flex-sm-grow-0"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 ring-1 ring-inset ring-slate-200 transition-colors cursor-pointer"
             >
-              <Search size={16} />
+              <Search size={14} />
               <span>Ara</span>
-            </Button>
+            </button>
 
-            <Button
-              variant="primary"
+            <button
+              type="button"
               onClick={handleFetchLiveRange}
               disabled={loading || fetchingLive}
-              className="d-flex align-items-center justify-content-center gap-2 fw-bold px-3 py-2 flex-grow-1 flex-sm-grow-0 shadow-sm"
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 shadow-2xs disabled:opacity-50 transition-colors cursor-pointer"
             >
-              <RefreshCw size={16} className={fetchingLive ? 'spin' : ''} />
-              <span>{fetchingLive ? 'Aksa’dan Çekiliyor...' : 'Aksa’dan Canlı Getir'}</span>
-            </Button>
+              <RefreshCw size={14} className={fetchingLive ? 'spin' : ''} />
+              <span>{fetchingLive ? 'Çekiliyor...' : 'Aksa’dan Canlı Getir'}</span>
+            </button>
 
-            <Button
-              variant="outline-success"
+            <button
+              type="button"
               onClick={handleExportExcel}
               disabled={history.length === 0}
-              className="px-3 py-2 d-flex align-items-center justify-content-center gap-1"
-              title="Excel İndir"
+              className="inline-flex items-center justify-center p-2 rounded-xl text-emerald-700 bg-emerald-50 hover:bg-emerald-100 ring-1 ring-inset ring-emerald-600/20 disabled:opacity-40 transition-colors cursor-pointer"
+              title="Excel Olarak İndir"
             >
-              <FileSpreadsheet size={18} />
-            </Button>
-          </Col>
-        </Row>
+              <FileSpreadsheet size={16} />
+            </button>
+          </div>
+        </div>
       </div>
 
       {message && (
-        <Alert variant={message.type} dismissible onClose={() => setMessage(null)} className="shadow-sm rounded-3 mb-3">
-          {message.text}
-        </Alert>
+        <div
+          className={`rounded-xl p-3.5 text-xs font-medium flex items-center justify-between ring-1 ring-inset ${
+            message.type === 'success'
+              ? 'bg-emerald-50 text-emerald-800 ring-emerald-600/20'
+              : message.type === 'warning'
+              ? 'bg-amber-50 text-amber-800 ring-amber-600/20'
+              : 'bg-rose-50 text-rose-800 ring-rose-600/20'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <AlertCircle size={16} className="shrink-0" />
+            <span>{message.text}</span>
+          </div>
+          <button type="button" onClick={() => setMessage(null)} className="text-slate-400 hover:text-slate-600">
+            <X size={15} />
+          </button>
+        </div>
       )}
 
-      {/* Summary KPI Cards for Selected Period */}
+      {/* Tremor Period KPI Summary */}
       {history.length > 0 && (
-        <Row className="g-3 mb-3 mb-md-4">
-          <Col md={4} sm={6} xs={12}>
-            <div className="kpi-card">
-              <div className="d-flex align-items-center justify-content-between">
-                <div>
-                  <div className="text-muted small fw-bold text-uppercase" style={{ fontSize: '11px' }}>
-                    DÖNEM TOPLAM TÜKETİM
-                  </div>
-                  <div className="fs-3 fw-bolder text-primary mt-1">
-                    {totalPeriodSm3.toLocaleString('tr-TR')} <small className="fs-6 fw-normal text-muted">Sm³</small>
-                  </div>
-                </div>
-                <div className="kpi-icon-box bg-primary-subtle text-primary">
-                  <Activity size={24} />
-                </div>
-              </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-2xs p-5">
+            <span className="text-xs font-medium text-slate-500">Dönem Toplam Tüketim (Sm³)</span>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl sm:text-3xl font-bold text-slate-900 tabular-nums">
+                {totalPeriodSm3.toLocaleString('tr-TR')}
+              </span>
+              <span className="text-xs text-slate-400">Sm³</span>
             </div>
-          </Col>
+          </div>
 
-          <Col md={4} sm={6} xs={12}>
-            <div className="kpi-card">
-              <div className="d-flex align-items-center justify-content-between">
-                <div>
-                  <div className="text-muted small fw-bold text-uppercase" style={{ fontSize: '11px' }}>
-                    DÖNEM TOPLAM ENERJİ
-                  </div>
-                  <div className="fs-3 fw-bolder text-info mt-1">
-                    {totalPeriodEnergyKcal.toLocaleString('tr-TR')} <small className="fs-6 fw-normal text-muted">kcal</small>
-                  </div>
-                </div>
-                <div className="kpi-icon-box bg-info-subtle text-info">
-                  <Flame size={24} />
-                </div>
-              </div>
+          <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-2xs p-5">
+            <span className="text-xs font-medium text-slate-500">Dönem Toplam Enerji (kcal)</span>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl sm:text-3xl font-bold text-slate-900 tabular-nums">
+                {totalPeriodEnergyKcal.toLocaleString('tr-TR')}
+              </span>
+              <span className="text-xs text-slate-400">kcal</span>
             </div>
-          </Col>
+          </div>
 
-          <Col md={4} sm={12} xs={12}>
-            <div className="kpi-card">
-              <div className="d-flex align-items-center justify-content-between">
-                <div>
-                  <div className="text-muted small fw-bold text-uppercase" style={{ fontSize: '11px' }}>
-                    TOPLAM LİSTELENEN KAYIT
-                  </div>
-                  <div className="fs-3 fw-bolder text-success mt-1">{history.length} Gün / Kayıt</div>
-                </div>
-                <div className="kpi-icon-box bg-success-subtle text-success">
-                  <Calendar size={24} />
-                </div>
-              </div>
+          <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-2xs p-5">
+            <span className="text-xs font-medium text-slate-500">Listelenen Toplam Kayıt</span>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-2xl sm:text-3xl font-bold text-slate-900 tabular-nums">
+                {history.length}
+              </span>
+              <span className="text-xs text-slate-400">Gün / Kayıt</span>
             </div>
-          </Col>
-        </Row>
+          </div>
+        </div>
       )}
 
-      {/* Results Card */}
-      <div className="dashboard-card overflow-hidden">
-        <div className="p-3 p-md-4 border-bottom d-flex justify-content-between align-items-center bg-white">
-          <h6 className="fw-bold mb-0 text-dark">Geçmiş Kayıt Listesi ({history.length})</h6>
-          <span className="badge bg-light text-dark border">{startDate} &rarr; {endDate}</span>
+      {/* Results Table Card */}
+      <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-2xs overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-900">Geçmiş Kayıt Listesi ({history.length})</h2>
+          <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md tabular-nums">
+            {startDate} &rarr; {endDate}
+          </span>
         </div>
 
         {loading || fetchingLive ? (
-          <div className="text-center py-5">
-            <Spinner animation="border" variant="primary" />
-            <div className="mt-3 text-muted fw-semibold">
-              {fetchingLive ? 'Seçili tarih aralığındaki günler Aksa RMSA üzerinden sorgulanıyor...' : 'Kayıtlar yükleniyor...'}
-            </div>
+          <div className="py-16 text-center">
+            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="mt-3 text-xs font-medium text-slate-500">
+              {fetchingLive ? 'Seçili tarih aralığındaki günler Aksa RMS-A üzerinden sorgulanıyor...' : 'Kayıtlar yükleniyor...'}
+            </p>
           </div>
         ) : history.length === 0 ? (
-          <div className="text-center py-5 text-muted px-3">
-            <div>Seçilen tarih aralığı için kayıt bulunamadı.</div>
-            <Button
-              variant="primary"
-              size="sm"
-              className="mt-3 d-inline-flex align-items-center gap-2 px-3 py-2"
+          <div className="py-14 text-center px-4">
+            <p className="text-xs text-slate-500 mb-3">Seçilen tarih aralığı için kayıt bulunamadı.</p>
+            <button
+              type="button"
               onClick={handleFetchLiveRange}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 cursor-pointer"
             >
-              <RefreshCw size={15} />
+              <RefreshCw size={14} />
               <span>Bu Tarih Aralığını Aksa'dan Canlı Çek</span>
-            </Button>
+            </button>
           </div>
         ) : (
           <>
             {/* DESKTOP TABLE */}
-            <div className="table-responsive d-none d-md-block">
-              <Table className="modern-table">
-                <thead>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200 text-left">
+                <thead className="bg-slate-50/80">
                   <tr>
-                    <th>Gaz Günü</th>
-                    <th>İstasyon Adı</th>
-                    <th className="text-end">5 - Tüketim (Sm³)</th>
-                    <th className="text-end">6 - Enerji (kcal)</th>
-                    <th className="text-center">7 - Isıl Değer (Ho)</th>
-                    <th className="text-center">Basınç / Sıcaklık</th>
-                    <th className="text-center">Durum</th>
-                    <th className="text-center">PDF Rapor</th>
-                    <th>Not / Açıklama</th>
-                    <th className="text-end">Detay</th>
+                    <th className="py-3 pl-6 pr-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Gaz Günü</th>
+                    <th className="py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">İstasyon</th>
+                    <th className="py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-right">5 - Tüketim (Sm³)</th>
+                    <th className="py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-right">6 - Enerji (kcal)</th>
+                    <th className="py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-center">7 - Isıl Değer (Ho)</th>
+                    <th className="py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-center">Basınç / Sıcaklık</th>
+                    <th className="py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-center">Durum</th>
+                    <th className="py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-center">Rapor</th>
+                    <th className="py-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Not</th>
+                    <th className="py-3 pl-3 pr-6 text-[11px] font-semibold uppercase tracking-wider text-slate-500 text-right">Detay</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-slate-100 bg-white text-sm">
                   {history.map((reading) => (
-                    <tr key={reading._id}>
-                      <td className="fw-bold text-dark">{reading.gasDate}</td>
-                      <td>
-                        <div className="fw-bold text-dark">{reading.stationName}</div>
-                        <small className="text-muted"><code>{reading.u}</code></small>
+                    <tr key={reading._id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3.5 pl-6 pr-3 text-xs font-bold text-slate-900 tabular-nums">{reading.gasDate}</td>
+                      <td className="py-3.5 px-3">
+                        <div className="font-semibold text-slate-900 text-xs">{reading.stationName}</div>
+                        <span className="text-[11px] font-mono text-slate-500">{reading.u}</span>
                       </td>
-                      <td className="text-end fw-bolder text-primary">
+                      <td className="py-3.5 px-3 text-right font-bold text-slate-900 tabular-nums">
                         {reading.consumption !== null && reading.consumption !== undefined
                           ? Number(reading.consumption).toLocaleString('tr-TR')
                           : '—'}
                       </td>
-                      <td className="text-end fw-bold text-dark">
+                      <td className="py-3.5 px-3 text-right font-semibold text-slate-700 tabular-nums">
                         {reading.energy !== null && reading.energy !== undefined
                           ? Number(reading.energy).toLocaleString('tr-TR')
                           : '—'}
                       </td>
-                      <td className="text-center">
+                      <td className="py-3.5 px-3 text-center tabular-nums">
                         {reading.superiorHeatingValue !== null && reading.superiorHeatingValue !== undefined ? (
-                          <div>
-                            <span className="fw-bold">{Number(reading.superiorHeatingValue).toLocaleString('tr-TR')}</span>
+                          <div className="inline-flex flex-col items-center">
+                            <span className="font-semibold text-slate-900">{Number(reading.superiorHeatingValue).toLocaleString('tr-TR')}</span>
                             {reading.isSubstitutedSHV && (
-                              <div>
-                                <Badge bg="info" className="p-1 mt-0.5" style={{ fontSize: '9px' }}>
-                                  7 Nolu İkame
-                                </Badge>
-                              </div>
+                              <span className="mt-0.5 inline-flex items-center rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700 ring-1 ring-inset ring-sky-600/20">
+                                7 Nolu İkame
+                              </span>
                             )}
                           </div>
                         ) : '—'}
                       </td>
-                      <td className="text-center">
-                        <div className="small fw-semibold">{reading.pressure ? `${reading.pressure} Bar` : '—'}</div>
-                        <div className="text-muted" style={{ fontSize: '11px' }}>{reading.temperature ? `${reading.temperature} °C` : '—'}</div>
+                      <td className="py-3.5 px-3 text-center tabular-nums">
+                        <div className="text-xs font-semibold text-slate-800">{reading.pressure ? `${reading.pressure} Bar` : '—'}</div>
+                        <div className="text-[11px] text-slate-500">{reading.temperature ? `${reading.temperature} °C` : '—'}</div>
                       </td>
-                      <td className="text-center">
+                      <td className="py-3.5 px-3 text-center">
                         {reading.status === 'APPROVED' && (
-                          <div>
-                            <Badge bg="success" pill>ONAYLANDI</Badge>
+                          <div className="inline-flex flex-col items-center">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                              Onaylandı
+                            </span>
                             {reading.approvalInfo?.actionAt && (
-                              <div className="text-success fw-semibold mt-1" style={{ fontSize: '10px' }}>
+                              <span className="text-[10px] text-slate-500 mt-0.5 tabular-nums">
                                 {new Date(reading.approvalInfo.actionAt).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                {reading.approvalInfo.actionBy && <div className="text-muted" style={{ fontSize: '9px' }}>({reading.approvalInfo.actionBy})</div>}
-                              </div>
+                              </span>
                             )}
                           </div>
                         )}
                         {reading.status === 'DENIED' && (
-                          <div>
-                            <Badge bg="danger" pill>REDDEDİLDİ</Badge>
+                          <div className="inline-flex flex-col items-center">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 ring-1 ring-inset ring-rose-600/20">
+                              Reddedildi
+                            </span>
                             {reading.approvalInfo?.actionAt && (
-                              <div className="text-danger fw-semibold mt-1" style={{ fontSize: '10px' }}>
+                              <span className="text-[10px] text-slate-500 mt-0.5 tabular-nums">
                                 {new Date(reading.approvalInfo.actionAt).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                {reading.approvalInfo.actionBy && <div className="text-muted" style={{ fontSize: '9px' }}>({reading.approvalInfo.actionBy})</div>}
-                              </div>
+                              </span>
                             )}
                           </div>
                         )}
-                        {reading.status === 'PENDING' && <Badge bg="warning" text="dark" pill>BEKLEMEDE</Badge>}
+                        {reading.status === 'PENDING' && (
+                          <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20">
+                            Beklemede
+                          </span>
+                        )}
                       </td>
-                      <td className="text-center">
+                      <td className="py-3.5 px-3 text-center">
                         {reading.files && reading.files.length > 0 ? (
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            className="px-2.5 py-1 small d-inline-flex align-items-center gap-1"
-                            onClick={() => setDetailModalData(reading)}
+                          <button
+                            type="button"
+                            onClick={() => setActiveReadingPage(reading)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 ring-1 ring-inset ring-blue-600/20 cursor-pointer"
                           >
-                            <FileText size={14} />
+                            <FileText size={13} />
                             <span>{reading.files.length} Rapor</span>
-                          </Button>
+                          </button>
                         ) : (
-                          <Button
-                            variant="outline-secondary"
-                            size="sm"
-                            className="px-2.5 py-1 small"
-                            onClick={() => setUploadModalData(reading)}
+                          <button
+                            type="button"
+                            onClick={() => setActiveReadingPage(reading)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-medium text-slate-600 bg-white hover:bg-slate-50 ring-1 ring-inset ring-slate-200 cursor-pointer"
                           >
-                            <Upload size={13} className="me-1" />
+                            <Upload size={13} />
                             <span>Yükle</span>
-                          </Button>
+                          </button>
                         )}
                       </td>
-                      <td className="small">
+                      <td className="py-3.5 px-3 text-xs text-slate-600">
                         {reading.operatorNote && (
-                          <div className="text-primary small" title={reading.operatorNote}>
-                            📝 {reading.operatorNote.length > 35 ? reading.operatorNote.slice(0, 35) + '...' : reading.operatorNote}
-                          </div>
+                          <span title={reading.operatorNote}>
+                            📝 {reading.operatorNote.length > 30 ? reading.operatorNote.slice(0, 30) + '...' : reading.operatorNote}
+                          </span>
                         )}
                       </td>
-                      <td className="text-end">
-                        <Button
-                          variant="light"
-                          size="sm"
-                          className="p-1.5 border text-info"
-                          onClick={() => setDetailModalData(reading)}
-                          title="Detay İncele"
+                      <td className="py-3.5 pl-3 pr-6 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setActiveReadingPage(reading)}
+                          className="p-2 rounded-xl text-slate-600 hover:text-blue-600 hover:bg-blue-50 ring-1 ring-inset ring-slate-200 cursor-pointer"
                         >
-                          <Eye size={16} />
-                        </Button>
+                          <Eye size={15} />
+                        </button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
-              </Table>
+              </table>
             </div>
 
             {/* MOBILE CARDS */}
-            <div className="d-md-none p-3 bg-light">
+            <div className="md:hidden divide-y divide-slate-200">
               {history.map((reading) => {
                 const isApproved = reading.status === 'APPROVED';
                 const isDenied = reading.status === 'DENIED';
                 const hasFiles = reading.files && reading.files.length > 0;
-                const statusClass = isApproved ? 'status-approved' : isDenied ? 'status-denied' : 'status-pending';
 
                 return (
-                  <div key={reading._id} className={`mobile-station-card ${statusClass}`}>
-                    <div className="d-flex justify-content-between align-items-start mb-2">
+                  <div key={reading._id} className="p-4 bg-white space-y-3">
+                    <div className="flex items-start justify-between">
                       <div>
-                        <div className="fw-bolder text-dark">{reading.stationName}</div>
-                        <div className="text-muted small">
-                          📅 <strong>{reading.gasDate}</strong> • <code>{reading.u}</code>
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setActiveReadingPage(reading)}
+                          className="text-sm font-bold text-slate-900 hover:text-blue-600 text-left"
+                        >
+                          {reading.stationName}
+                        </button>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          📅 <strong className="text-slate-700">{reading.gasDate}</strong> • <span className="font-mono">{reading.u}</span>
+                        </p>
                       </div>
-                      {isApproved && <Badge bg="success" pill>ONAYLANDI</Badge>}
-                      {isDenied && <Badge bg="danger" pill>REDDEDİLDİ</Badge>}
-                      {!isApproved && !isDenied && <Badge bg="warning" text="dark" pill>BEKLEMEDE</Badge>}
+                      {isApproved && <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-600/20">Onaylandı</span>}
+                      {isDenied && <span className="rounded-md bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 ring-1 ring-rose-600/20">Reddedildi</span>}
+                      {!isApproved && !isDenied && <span className="rounded-md bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-amber-600/20">Beklemede</span>}
                     </div>
 
-                    <div className="mobile-metric-grid">
-                      <div className="mobile-metric-item">
-                        <div className="text-muted" style={{ fontSize: '10.5px', fontWeight: 600 }}>5-TÜKETİM</div>
-                        <div className="fw-bolder text-primary">
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="bg-slate-50 rounded-xl p-2.5 ring-1 ring-slate-200/70">
+                        <span className="text-[10px] font-semibold uppercase text-slate-500 block">5-Tüketim</span>
+                        <span className="text-sm font-bold text-slate-900 tabular-nums">
                           {reading.consumption !== null ? `${Number(reading.consumption).toLocaleString('tr-TR')} Sm³` : '—'}
-                        </div>
+                        </span>
                       </div>
-                      <div className="mobile-metric-item">
-                        <div className="text-muted" style={{ fontSize: '10.5px', fontWeight: 600 }}>6-ENERJİ</div>
-                        <div className="fw-bold text-success">
+                      <div className="bg-slate-50 rounded-xl p-2.5 ring-1 ring-slate-200/70">
+                        <span className="text-[10px] font-semibold uppercase text-slate-500 block">6-Enerji</span>
+                        <span className="text-sm font-bold text-slate-900 tabular-nums">
                           {reading.energy !== null ? `${Number(reading.energy).toLocaleString('tr-TR')} kcal` : '—'}
-                        </div>
-                      </div>
-                      <div className="mobile-metric-item">
-                        <div className="text-muted" style={{ fontSize: '10.5px', fontWeight: 600 }}>7-ÜST ISIL (Ho)</div>
-                        <div className="fw-bold text-dark">
-                          {reading.superiorHeatingValue !== null ? Number(reading.superiorHeatingValue).toLocaleString('tr-TR') : '—'}
-                        </div>
-                      </div>
-                      <div className="mobile-metric-item">
-                        <div className="text-muted" style={{ fontSize: '10.5px', fontWeight: 600 }}>BASINÇ / SICAKLIK</div>
-                        <div className="small fw-semibold text-dark">
-                          {reading.pressure ?? '—'} Bar / {reading.temperature ?? '—'} °C
-                        </div>
+                        </span>
                       </div>
                     </div>
 
-                    <div className="d-flex gap-2 pt-2 border-top">
-                      <Button
-                        variant={hasFiles ? 'primary' : 'outline-info'}
-                        size="sm"
-                        className="flex-grow-1 d-flex align-items-center justify-content-center gap-1 py-2"
-                        onClick={() => setDetailModalData(reading)}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveReadingPage(reading)}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-blue-700 bg-blue-50 ring-1 ring-blue-600/20"
                       >
-                        <Eye size={15} />
+                        <Eye size={14} />
                         <span>{hasFiles ? `Rapor & Detay (${reading.files.length})` : 'Detay İncele'}</span>
-                      </Button>
-                      <Button
-                        variant="outline-secondary"
-                        size="sm"
-                        className="px-3 py-2"
-                        onClick={() => setUploadModalData(reading)}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveReadingPage(reading)}
+                        className="p-2 rounded-xl text-slate-600 bg-slate-100 ring-1 ring-slate-200"
                       >
                         <Upload size={15} />
-                      </Button>
+                      </button>
                     </div>
                   </div>
                 );
@@ -513,25 +504,6 @@ export default function ArchivePage() {
           </>
         )}
       </div>
-
-      <ReadingDetailModal
-        show={!!detailModalData}
-        onHide={() => setDetailModalData(null)}
-        reading={detailModalData}
-        onReadingUpdated={(updated) => {
-          setHistory(prev => prev.map(h => (h._id === updated._id ? updated : h)));
-          setDetailModalData(updated);
-        }}
-      />
-
-      <FileUploadModal
-        show={!!uploadModalData}
-        onHide={() => setUploadModalData(null)}
-        reading={uploadModalData}
-        onFilesUpdated={(updated) => {
-          setHistory(prev => prev.map(h => (h._id === updated._id ? updated : h)));
-        }}
-      />
     </div>
   );
 }

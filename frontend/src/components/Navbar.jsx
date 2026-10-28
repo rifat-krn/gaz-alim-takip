@@ -1,150 +1,169 @@
 import React, { useState } from 'react';
-import { Navbar, Nav, Container, Badge } from 'react-bootstrap';
-import { Flame, Activity, Database, Users, History, LogOut, UserCheck } from 'lucide-react';
+import { Activity, Database, Users, History, LogOut, UserCheck, Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function AppNavbar({ activeTab, setActiveTab }) {
   const { user, logout, isAdmin } = useAuth();
-  const [expanded, setExpanded] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleSelectTab = (tab) => {
     setActiveTab(tab);
-    setExpanded(false);
+    setMobileMenuOpen(false);
   };
 
+  const navItems = [
+    { id: 'daily', label: 'Günlük Okumalar', icon: Activity, show: true },
+    { id: 'archive', label: 'Geçmiş & Arşiv', icon: History, show: true },
+    { id: 'stations', label: 'İstasyon Yönetimi', icon: Database, show: isAdmin },
+    { id: 'users', label: 'Kullanıcı Yönetimi', icon: Users, show: isAdmin }
+  ].filter(item => item.show);
+
   return (
-    <Navbar 
-      expanded={expanded} 
-      onToggle={(val) => setExpanded(val)}
-      expand="lg" 
-      className="shadow-sm mb-3 mb-md-4 py-2.5 sticky-top"
-      style={{
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-        borderBottom: '1px solid rgba(255,255,255,0.08)'
-      }}
-      variant="dark"
-    >
-      <Container fluid className="px-3 px-md-4">
-        <Navbar.Brand 
-          href="#home" 
-          onClick={(e) => { e.preventDefault(); handleSelectTab('daily'); }}
-          className="d-flex align-items-center gap-2.5 fw-bold text-white me-lg-4"
-        >
-          <div 
-            className="p-2 rounded-3 d-flex align-items-center justify-content-center shadow-sm" 
-            style={{ 
-              width: 38, 
-              height: 38, 
-              background: 'linear-gradient(135deg, #f59e0b 0%, #ea580c 100%)' 
-            }}
-          >
-            <Flame size={20} className="text-white" />
-          </div>
-          <div className="d-flex flex-column">
-            <span className="fs-6 fw-bolder tracking-tight" style={{ letterSpacing: '0.3px', lineHeight: 1.1 }}>
-              GAZ ALIM TAKİP
-            </span>
-            <span className="text-warning" style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.8px' }}>
-              RMS-A OTOMASYON PANELİ
-            </span>
-          </div>
-        </Navbar.Brand>
-
-        <Navbar.Toggle aria-controls="main-nav" className="border-0 shadow-none" />
-        <Navbar.Collapse id="main-nav" className="mt-2 mt-lg-0">
-          <Nav className="me-auto gap-1 my-2 my-lg-0">
-            <Nav.Link 
-              active={activeTab === 'daily'} 
-              onClick={() => handleSelectTab('daily')}
-              className={`d-flex align-items-center gap-2 px-3 py-2 rounded-3 fw-semibold transition-all ${
-                activeTab === 'daily' 
-                  ? 'bg-primary text-white shadow-sm' 
-                  : 'text-light opacity-75'
-              }`}
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-2xs">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          {/* Brand Logo */}
+          <div className="flex items-center gap-6">
+            <a
+              href="#daily"
+              onClick={(e) => { e.preventDefault(); handleSelectTab('daily'); }}
+              className="flex items-center gap-3 text-decoration-none group"
             >
-              <Activity size={17} />
-              <span>Günlük Okumalar</span>
-            </Nav.Link>
+              <img
+                src="/logo.svg"
+                alt="Aksa Doğalgaz"
+                className="h-9 sm:h-10 w-auto shrink-0"
+              />
+              <div className="flex flex-col">
+                <span className="text-sm font-bold tracking-tight text-slate-900 leading-none">
+                  GAZ ALIM TAKİP
+                </span>
+                <span className="text-[11px] font-medium text-blue-600 mt-1 leading-none">
+                  RMS-A Analitik & Kontrol
+                </span>
+              </div>
+            </a>
 
-            <Nav.Link 
-              active={activeTab === 'archive'} 
-              onClick={() => handleSelectTab('archive')}
-              className={`d-flex align-items-center gap-2 px-3 py-2 rounded-3 fw-semibold transition-all ${
-                activeTab === 'archive' 
-                  ? 'bg-primary text-white shadow-sm' 
-                  : 'text-light opacity-75'
-              }`}
-            >
-              <History size={17} />
-              <span>Geçmiş & Arşiv</span>
-            </Nav.Link>
+            {/* Desktop Navigation Links (Tremor Tab Style) */}
+            <nav className="hidden lg:flex items-center gap-1 ml-4 bg-slate-100/80 p-1 rounded-xl border border-slate-200/70">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleSelectTab(item.id)}
+                    className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-white text-blue-600 shadow-xs ring-1 ring-slate-200'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                    }`}
+                  >
+                    <Icon size={15} className={isActive ? 'text-blue-600' : 'text-slate-400'} />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
 
-            {isAdmin && (
-              <>
-                <Nav.Link 
-                  active={activeTab === 'stations'} 
-                  onClick={() => handleSelectTab('stations')}
-                  className={`d-flex align-items-center gap-2 px-3 py-2 rounded-3 fw-semibold transition-all ${
-                    activeTab === 'stations' 
-                      ? 'bg-primary text-white shadow-sm' 
-                      : 'text-light opacity-75'
-                  }`}
-                >
-                  <Database size={17} />
-                  <span>İstasyonlar</span>
-                </Nav.Link>
-
-                <Nav.Link 
-                  active={activeTab === 'users'} 
-                  onClick={() => handleSelectTab('users')}
-                  className={`d-flex align-items-center gap-2 px-3 py-2 rounded-3 fw-semibold transition-all ${
-                    activeTab === 'users' 
-                      ? 'bg-primary text-white shadow-sm' 
-                      : 'text-light opacity-75'
-                  }`}
-                >
-                  <Users size={17} />
-                  <span>Kullanıcılar</span>
-                </Nav.Link>
-              </>
-            )}
-          </Nav>
-
-          <Nav className="align-items-lg-center pt-2 pt-lg-0 border-top border-secondary border-opacity-25 border-lg-0">
+          {/* Right User Profile & Logout */}
+          <div className="hidden lg:flex items-center gap-4">
             {user && (
-              <div className="d-flex align-items-center justify-content-between gap-3 w-100">
-                <div className="d-flex align-items-center gap-2.5">
-                  <div className="bg-secondary bg-opacity-25 p-2 rounded-circle text-info d-flex align-items-center justify-content-center">
-                    <UserCheck size={18} />
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/80">
+                  <div className="w-7 h-7 rounded-full bg-blue-50 text-blue-600 ring-1 ring-blue-500/20 flex items-center justify-center">
+                    <UserCheck size={14} />
                   </div>
-                  <div>
-                    <div className="text-white fw-semibold small lh-tight">{user.fullName || user.username}</div>
-                    <Badge 
-                      bg={isAdmin ? 'warning' : 'info'} 
-                      text={isAdmin ? 'dark' : 'white'} 
-                      className="text-uppercase mt-0.5" 
-                      style={{ fontSize: '9.5px' }}
-                    >
-                      {isAdmin 
-                        ? 'Sistem Yöneticisi' 
-                        : (user.assignedStation?.name || user.stationU ? `${user.assignedStation?.name || user.stationU.toUpperCase()} Operatörü` : 'Operatör')}
-                    </Badge>
+                  <div className="text-left">
+                    <div className="text-xs font-semibold text-slate-800 leading-tight">
+                      {user.fullName || user.username}
+                    </div>
+                    <div className="text-[10px] font-medium text-slate-500 leading-tight">
+                      {isAdmin
+                        ? 'Sistem Yöneticisi'
+                        : (user.assignedStation?.name || user.stationU ? `${user.assignedStation?.name || user.stationU.toUpperCase()} Yetkilisi` : 'Operatör')}
+                    </div>
                   </div>
                 </div>
 
-                <button 
-                  onClick={logout} 
-                  className="btn btn-danger btn-sm d-flex align-items-center gap-1.5 px-3 py-2 shadow-sm"
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 ring-1 ring-inset ring-rose-500/20 transition-colors"
                   title="Güvenli Çıkış"
                 >
-                  <LogOut size={15} />
+                  <LogOut size={14} />
                   <span>Çıkış</span>
                 </button>
               </div>
             )}
-          </Nav>
-        </Navbar.Collapse>
-      </Container>
-    </Navbar>
+          </div>
+
+          {/* Mobile Hamburger Button */}
+          <div className="flex lg:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 focus:outline-none"
+            >
+              {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Navigation Drawer */}
+      {mobileMenuOpen && (
+        <div className="lg:hidden border-t border-slate-200 bg-white px-4 pt-3 pb-4 space-y-2 shadow-lg">
+          <div className="grid grid-cols-1 gap-1">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleSelectTab(item.id)}
+                  className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold w-full text-left transition-all ${
+                    isActive
+                      ? 'bg-blue-50 text-blue-600 ring-1 ring-blue-500/20'
+                      : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  <Icon size={18} className={isActive ? 'text-blue-600' : 'text-slate-400'} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {user && (
+            <div className="pt-3 mt-2 border-t border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <UserCheck size={16} />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-slate-900">{user.fullName || user.username}</div>
+                  <div className="text-[11px] text-slate-500">
+                    {isAdmin ? 'Sistem Yöneticisi' : `${user.assignedStation?.name || user.stationU?.toUpperCase()} Yetkilisi`}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={logout}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-rose-600 bg-rose-50 ring-1 ring-inset ring-rose-500/20"
+              >
+                <LogOut size={14} />
+                <span>Çıkış</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </header>
   );
 }
