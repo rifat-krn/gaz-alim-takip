@@ -4,7 +4,61 @@ const NotificationSetting = require('../models/NotificationSetting');
 const Station = require('../models/Station');
 const User = require('../models/User');
 const GasReading = require('../models/GasReading');
-const { fetchReadingFromAksa, syncRemoteFilesForReading, calculateGasDayStrings } = require('./aksaService');
+const { getGasDayInfo } = require('../utils/gasDateHelper');
+const { fetchStationGasData, syncRemoteFilesForReading } = require('./aksaService');
+
+async function ensureStationReadingForDate(station, gasDate) {
+  let existing = await GasReading.findOne({ u: station.u, gasDate });
+  if ((!existing || !existing.fetchStatus?.isFetched) && station.u && station.p) {
+    try {
+      const gasInfo = getGasDayInfo(gasDate);
+      const fetchResult = await fetchStationGasData(station.u, station.p, gasDate);
+      if (fetchResult && fetchResult.success) {
+        if (!existing) {
+          existing = new GasReading({
+            stationId: station._id,
+            stationName: station.name,
+            u: station.u,
+            gasDate,
+            dt1: gasInfo.dt1,
+            dt2: gasInfo.dt2,
+            dt3: gasInfo.dt3,
+            status: 'PENDING',
+            files: []
+          });
+        }
+        existing.dt1 = gasInfo.dt1;
+        existing.dt2 = gasInfo.dt2;
+        existing.dt3 = gasInfo.dt3;
+        existing.consumption = fetchResult.consumption;
+        existing.energy = fetchResult.energy;
+        existing.superiorHeatingValue = fetchResult.superiorHeatingValue;
+        existing.operatorSuperiorHeatingValue = fetchResult.operatorSuperiorHeatingValue;
+        existing.stationTotalSuperiorHeatingValue = fetchResult.stationTotalSuperiorHeatingValue;
+        existing.isSubstitutedSHV = fetchResult.isSubstitutedSHV;
+        existing.operatorNote = fetchResult.operatorNote;
+        existing.dataNote = fetchResult.dataNote;
+        existing.pressure = fetchResult.pressure;
+        existing.temperature = fetchResult.temperature;
+        existing.specificGravity = fetchResult.specificGravity;
+        existing.composition = fetchResult.composition;
+        existing.rawData = fetchResult.rawData;
+        existing.fetchStatus = {
+          isFetched: true,
+          fetchedAt: new Date(),
+          errorMessage: ''
+        };
+        if (fetchResult.remoteFiles && fetchResult.remoteFiles.length > 0) {
+          await syncRemoteFilesForReading(existing, fetchResult.remoteFiles);
+        }
+        await existing.save();
+      }
+    } catch (err) {
+      console.error(`[DailyCheck] Auto-fetch error for ${station.u} (${gasDate}):`, err.message);
+    }
+  }
+  return existing;
+}
 
 let scheduledTask = null;
 
@@ -214,50 +268,7 @@ async function runDailyApprovalCheck({ targetGasDate = null, triggerType = 'CRON
   // Ensure readings are loaded (and optionally auto-fetched if missing)
   if (settings.autoFetchBeforeCheck) {
     for (const station of stations) {
-      let existing = await GasReading.findOne({ u: station.u, gasDate });
-      if (!existing || !existing.fetchStatus?.isFetched) {
-        try {
-          const result = await fetchReadingFromAksa(station, gasDate);
-          if (result.success) {
-            existing = await GasReading.findOneAndUpdate(
-              { u: station.u, gasDate },
-              {
-                $set: {
-                  stationId: station._id,
-                  stationName: station.name,
-                  u: station.u,
-                  gasDate,
-                  dt1: result.gasInfo.dt1,
-                  dt3: result.gasInfo.dt3,
-                  consumption: result.parsed.consumption,
-                  energy: result.parsed.energy,
-                  superiorHeatingValue: result.parsed.superiorHeatingValue,
-                  operatorSuperiorHeatingValue: result.parsed.operatorSuperiorHeatingValue,
-                  stationTotalSuperiorHeatingValue: result.parsed.stationTotalSuperiorHeatingValue,
-                  isSubstitutedSHV: result.parsed.isSubstitutedSHV,
-                  pressure: result.parsed.pressure,
-                  temperature: result.parsed.temperature,
-                  specificGravity: result.parsed.specificGravity,
-                  composition: result.parsed.composition,
-                  operatorNote: result.parsed.operatorNote,
-                  rawData: result.rawData,
-                  fetchStatus: {
-                    isFetched: true,
-                    fetchedAt: new Date(),
-                    errorMessage: null
-                  }
-                }
-              },
-              { upsert: true, new: true }
-            );
-            if (result.remoteFiles && result.remoteFiles.length > 0) {
-              existing = await syncRemoteFilesForReading(existing, result.remoteFiles);
-            }
-          }
-        } catch (err) {
-          console.error(`[DailyCheck] Auto-fetch error for ${station.u}:`, err.message);
-        }
-      }
+      await ensureStationReadingForDate(station, gasDate);
     }
   }
 
@@ -486,7 +497,7 @@ async function runDailyApprovalCheck({ targetGasDate = null, triggerType = 'CRON
   };
 }
 
-async function sendSingleUserTestEmail(userId) {
+async function sendSingleUserTestEmail(userId, targetGasDate = null) {
   const settings = await getOrCreateSettings();
   const user = await User.findById(userId).populate('assignedStation');
   if (!user) {
@@ -514,7 +525,7 @@ async function sendSingleUserTestEmail(userId) {
     };
   }
 
-  const gasDate = settings.checkTarget === 'TODAY' ? getTodayDateStr() : getYesterdayDateStr();
+  const gasDate = targetGasDate || (settings.checkTarget === 'TODAY' ? getTodayDateStr() : getYesterdayDateStr());
   let station = user.assignedStation;
   if (!station && user.stationU) {
     station = await Station.findOne({ u: user.stationU });
@@ -523,7 +534,7 @@ async function sendSingleUserTestEmail(userId) {
     station = { name: user.fullName || 'Genel Yönetici', u: user.stationU || user.username };
   }
 
-  const reading = await GasReading.findOne({ u: station.u, gasDate });
+  const reading = await ensureStationReadingForDate(station, gasDate);
   const senderAddress = settings.fromEmail || settings.smtpUser || process.env.SMTP_FROM_EMAIL || 'noreply@gazalimtakip.local';
   const senderHeader = `"${settings.fromName || 'Gaz Alım Takip Sistemi'}" <${senderAddress}>`;
 
@@ -541,7 +552,7 @@ async function sendSingleUserTestEmail(userId) {
 
     return {
       emailDeliverySuccess: true,
-      message: `E-posta gönderimi başarılı! '${station.name}' raporu TO: [${toEmails.join(', ') || '-'}] / CC: [${ccEmails.join(', ') || '-'}] adreslerine başarıyla iletildi.`
+      message: `E-posta gönderimi başarılı! '${station.name}' (${gasDate} gaz günü) raporu TO: [${toEmails.join(', ') || '-'}] / CC: [${ccEmails.join(', ') || '-'}] adreslerine başarıyla iletildi.`
     };
   } catch (err) {
     return {
@@ -592,8 +603,14 @@ async function sendGeneralTestEmail(overrideSettings = {}) {
     };
   }
 
-  const gasDate = settings.checkTarget === 'TODAY' ? getTodayDateStr() : getYesterdayDateStr();
+  const gasDate =
+    overrideSettings?.targetGasDate ||
+    overrideSettings?.gasDate ||
+    (settings.checkTarget === 'TODAY' ? getTodayDateStr() : getYesterdayDateStr());
   const stations = await Station.find({ isActive: true }).sort({ order: 1, name: 1 });
+  for (const st of stations) {
+    await ensureStationReadingForDate(st, gasDate);
+  }
   const users = await User.find({ isActive: true });
   const readings = await GasReading.find({ gasDate });
   const readingMap = {};
@@ -638,7 +655,7 @@ async function sendGeneralTestEmail(overrideSettings = {}) {
 
     return {
       emailDeliverySuccess: true,
-      message: `E-posta gönderimi başarılı! Genel test raporu Genel TO: [${globalTo.join(', ') || '-'}] / Genel CC: [${globalCc.join(', ') || '-'}] adreslerine başarıyla iletildi.`,
+      message: `E-posta gönderimi başarılı! (${gasDate} gaz günü) Genel test raporu Genel TO: [${globalTo.join(', ') || '-'}] / Genel CC: [${globalCc.join(', ') || '-'}] adreslerine başarıyla iletildi.`,
       settings
     };
   } catch (err) {

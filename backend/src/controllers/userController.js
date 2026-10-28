@@ -256,7 +256,8 @@ exports.triggerDailyCheckNow = async (req, res) => {
 exports.sendTestEmailForUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await sendSingleUserTestEmail(id);
+    const { gasDate, targetGasDate } = req.body || {};
+    const result = await sendSingleUserTestEmail(id, gasDate || targetGasDate || null);
     res.json({
       success: true,
       emailDeliverySuccess: result.emailDeliverySuccess,

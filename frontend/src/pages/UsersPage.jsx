@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Users, Plus, Trash2, Shield, User, X, 
-  Mail, Clock, Send, Save, CheckCircle2, XCircle, Server
+  Mail, Clock, Send, Save, CheckCircle2, XCircle, Server, Calendar
 } from 'lucide-react';
 import api from '../api/axiosClient';
 import UserModal from '../components/UserModal';
@@ -116,6 +116,11 @@ export default function UsersPage() {
   const [testingGeneralMail, setTestingGeneralMail] = useState(false);
   const [generalTestStatus, setGeneralTestStatus] = useState(null);
   const [testEmailStatus, setTestEmailStatus] = useState({});
+  const [testGasDate, setTestGasDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  });
 
   const showNotification = (type, title, text) => {
     setMessage({ type, title, text });
@@ -238,7 +243,10 @@ export default function UsersPage() {
     setGeneralTestStatus(null);
     setMessage(null);
     try {
-      const res = await api.post('/users/notification-settings/send-test-email', settings);
+      const res = await api.post('/users/notification-settings/send-test-email', {
+        ...settings,
+        targetGasDate: testGasDate
+      });
       if (res.data.settings) {
         setSettings(res.data.settings);
       }
@@ -267,7 +275,9 @@ export default function UsersPage() {
   const handleSendUserTestEmail = async (u) => {
     setTestEmailStatus(prev => ({ ...prev, [u._id]: { status: 'sending' } }));
     try {
-      const res = await api.post(`/users/${u._id}/send-test-email`);
+      const res = await api.post(`/users/${u._id}/send-test-email`, {
+        gasDate: testGasDate
+      });
       const isOk = Boolean(res.data.emailDeliverySuccess);
       setTestEmailStatus(prev => ({
         ...prev,
@@ -385,14 +395,28 @@ export default function UsersPage() {
 
       {/* SECTION 1: Per-Station / User TO & CC Recipients Table */}
       <div className="bg-white rounded-xl ring-1 ring-slate-200 shadow-2xs overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h2 className="text-sm font-bold text-slate-900">
               İstasyon Bazlı Kullanıcı ve TO / CC Mail Ayarları ({users.length})
             </h2>
             <p className="text-xs text-slate-500">
-              Her istasyon özelinde ayrı TO ve CC e-posta adresleri ekleyebilir ve istasyon bazlı test maili gönderebilirsiniz
+              Her istasyon özelinde ayrı TO ve CC e-posta adresleri ekleyebilir ve seçilen gaz günü için test maili gönderebilirsiniz
             </p>
+          </div>
+
+          <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl ring-1 ring-inset ring-slate-200 shrink-0">
+            <Calendar size={14} className="text-indigo-600 shrink-0" />
+            <label htmlFor="station-test-gas-date" className="text-xs font-semibold text-slate-700 whitespace-nowrap">
+              Test Gaz Günü:
+            </label>
+            <input
+              id="station-test-gas-date"
+              type="date"
+              value={testGasDate}
+              onChange={(e) => setTestGasDate(e.target.value)}
+              className="rounded-lg border-0 py-1 px-2 text-xs font-bold text-slate-900 bg-white ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-indigo-600 outline-none cursor-pointer"
+            />
           </div>
         </div>
 
@@ -610,6 +634,19 @@ export default function UsersPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl ring-1 ring-inset ring-slate-200">
+              <Calendar size={14} className="text-indigo-600 shrink-0" />
+              <label htmlFor="general-test-gas-date" className="text-xs font-semibold text-slate-700 whitespace-nowrap">
+                Test Gaz Günü:
+              </label>
+              <input
+                id="general-test-gas-date"
+                type="date"
+                value={testGasDate}
+                onChange={(e) => setTestGasDate(e.target.value)}
+                className="rounded-lg border-0 py-1 px-2 text-xs font-bold text-slate-900 bg-slate-50 ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-indigo-600 outline-none cursor-pointer"
+              />
+            </div>
             <button
               type="button"
               disabled={testingGeneralMail}
@@ -617,7 +654,7 @@ export default function UsersPage() {
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 ring-1 ring-inset ring-indigo-600/20 disabled:opacity-50 transition-colors cursor-pointer"
             >
               <Send size={14} />
-              <span>{testingGeneralMail ? 'Test Maili Gönderiliyor...' : 'Genel Test Maili Gönder'}</span>
+              <span>{testingGeneralMail ? 'Test Maili Gönderiliyor...' : `Genel Test Maili Gönder (${testGasDate})`}</span>
             </button>
           </div>
         </div>
@@ -796,7 +833,7 @@ export default function UsersPage() {
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 ring-1 ring-inset ring-indigo-600/20 disabled:opacity-50 transition-colors cursor-pointer"
             >
               <Send size={15} />
-              <span>{testingGeneralMail ? 'Test Maili Gönderiliyor...' : 'Genel Test Maili Gönder'}</span>
+              <span>{testingGeneralMail ? 'Test Maili Gönderiliyor...' : `Genel Test Maili Gönder (${testGasDate})`}</span>
             </button>
 
             <button
