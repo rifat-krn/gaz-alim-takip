@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Table, Button, Badge, Form, Row, Col, Spinner, Alert } from 'react-bootstrap';
-import { History, Search, FileSpreadsheet, Eye, Download, FileText, RefreshCw, CalendarRange } from 'lucide-react';
+import { 
+  History, Search, FileSpreadsheet, Eye, FileText, RefreshCw, 
+  Activity, Flame, Calendar, Upload 
+} from 'lucide-react';
 import * as XLSX from 'xlsx';
 import api from '../api/axiosClient';
 import { useAuth } from '../context/AuthContext';
@@ -36,7 +39,6 @@ export default function ArchivePage() {
   const [uploadModalData, setUploadModalData] = useState(null);
 
   useEffect(() => {
-    // Load station list for filter dropdown
     api.get('/stations').then((res) => {
       if (res.data.success) setStations(res.data.stations);
     });
@@ -106,6 +108,7 @@ export default function ArchivePage() {
       'Durum': r.status === 'APPROVED' ? 'ONAYLANDI' : r.status === 'DENIED' ? 'REDDEDİLDİ' : 'BEKLEMEDE',
       'Yüklü Dosya Sayısı': r.files ? r.files.length : 0,
       'İşlem Yapan': r.approvalInfo?.actionBy || '',
+      'İşlem Tarihi ve Saati': r.approvalInfo?.actionAt ? new Date(r.approvalInfo.actionAt).toLocaleString('tr-TR') : '',
       'Açıklama / Not': r.operatorNote || r.approvalInfo?.notes || r.approvalInfo?.rejectionReason || ''
     }));
 
@@ -120,204 +123,227 @@ export default function ArchivePage() {
 
   return (
     <div>
-      <Card className="shadow-sm border-0 mb-4">
-        <Card.Body className="p-4">
-          <div className="d-flex align-items-center gap-2 mb-3">
-            <History size={24} className="text-primary" />
-            <div>
-              <h4 className="fw-bold mb-0">Geçmiş Okuma Arşivi & Raporlar</h4>
-              <small className="text-muted">
-                {isAdmin ? 'Tüm istasyonlar için tarih aralıklı geçmiş sorgulama ve Aksa canlı çekme' : `${user?.assignedStation?.name || user?.stationU?.toUpperCase() || ''} İstasyonu Geçmiş Kayıtları`}
-              </small>
-            </div>
+      {/* Filter Header Card */}
+      <div className="dashboard-card p-3 p-md-4 mb-3 mb-md-4">
+        <div className="d-flex align-items-center gap-2.5 mb-3">
+          <div className="bg-primary-subtle text-primary p-2 rounded-3">
+            <History size={22} />
           </div>
+          <div>
+            <h5 className="fw-bold mb-0 text-dark">Geçmiş Okuma Arşivi & Raporlar</h5>
+            <small className="text-muted">
+              {isAdmin 
+                ? 'Tüm istasyonlar için tarih aralıklı geçmiş sorgulama ve Aksa canlı veri çekme' 
+                : `${user?.assignedStation?.name || user?.stationU?.toUpperCase() || ''} İstasyonu Geçmiş Kayıtları`}
+            </small>
+          </div>
+        </div>
 
-          {/* Filter Form */}
-          <Row className="g-3 align-items-end">
-            <Col lg={2} md={3} sm={6}>
-              <Form.Label className="small fw-semibold">Başlangıç Tarihi</Form.Label>
-              <Form.Control
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </Col>
+        <Row className="g-3 align-items-end">
+          <Col lg={2} md={3} sm={6} xs={6}>
+            <Form.Label className="small fw-bold text-muted mb-1">Başlangıç Tarihi</Form.Label>
+            <Form.Control
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </Col>
 
-            <Col lg={2} md={3} sm={6}>
-              <Form.Label className="small fw-semibold">Bitiş Tarihi</Form.Label>
-              <Form.Control
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </Col>
+          <Col lg={2} md={3} sm={6} xs={6}>
+            <Form.Label className="small fw-bold text-muted mb-1">Bitiş Tarihi</Form.Label>
+            <Form.Control
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+          </Col>
 
-            <Col lg={2} md={3} sm={6}>
-              <Form.Label className="small fw-semibold">İstasyon</Form.Label>
-              <Form.Select
-                value={!isAdmin && user?.stationU ? user.stationU : selectedStation}
-                onChange={(e) => setSelectedStation(e.target.value)}
-                disabled={!isAdmin && !!user?.stationU}
-              >
-                {isAdmin && <option value="">Tüm İstasyonlar</option>}
-                {stations
-                  .filter(st => isAdmin || !user?.stationU || st.u === user.stationU)
-                  .map((st) => (
-                    <option key={st._id} value={st.u}>{st.name}</option>
-                  ))}
-              </Form.Select>
-            </Col>
+          <Col lg={2} md={3} sm={6} xs={12}>
+            <Form.Label className="small fw-bold text-muted mb-1">İstasyon</Form.Label>
+            <Form.Select
+              value={!isAdmin && user?.stationU ? user.stationU : selectedStation}
+              onChange={(e) => setSelectedStation(e.target.value)}
+              disabled={!isAdmin && !!user?.stationU}
+            >
+              {isAdmin && <option value="">Tüm İstasyonlar</option>}
+              {stations
+                .filter(st => isAdmin || !user?.stationU || st.u === user.stationU)
+                .map((st) => (
+                  <option key={st._id} value={st.u}>{st.name}</option>
+                ))}
+            </Form.Select>
+          </Col>
 
-            <Col lg={2} md={3} sm={6}>
-              <Form.Label className="small fw-semibold">Onay Durumu</Form.Label>
-              <Form.Select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-              >
-                <option value="">Tümü</option>
-                <option value="APPROVED">Onaylanan</option>
-                <option value="PENDING">Beklemede</option>
-                <option value="DENIED">Reddedilen</option>
-              </Form.Select>
-            </Col>
+          <Col lg={2} md={3} sm={6} xs={12}>
+            <Form.Label className="small fw-bold text-muted mb-1">Onay Durumu</Form.Label>
+            <Form.Select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+            >
+              <option value="">Tümü</option>
+              <option value="APPROVED">Onaylanan</option>
+              <option value="PENDING">Beklemede</option>
+              <option value="DENIED">Reddedilen</option>
+            </Form.Select>
+          </Col>
 
-            <Col lg={4} md={12} className="d-flex flex-wrap gap-2 justify-content-lg-end">
-              <Button
-                variant="outline-primary"
-                onClick={fetchHistory}
-                disabled={loading || fetchingLive}
-                className="d-flex align-items-center gap-1"
-                title="Veritabanında Ara"
-              >
-                <Search size={16} />
-                <span>Ara</span>
-              </Button>
+          <Col lg={4} md={12} className="d-flex flex-wrap gap-2 justify-content-lg-end">
+            <Button
+              variant="outline-primary"
+              onClick={fetchHistory}
+              disabled={loading || fetchingLive}
+              className="d-flex align-items-center justify-content-center gap-1.5 px-3 py-2 flex-grow-1 flex-sm-grow-0"
+            >
+              <Search size={16} />
+              <span>Ara</span>
+            </Button>
 
-              <Button
-                variant="primary"
-                onClick={handleFetchLiveRange}
-                disabled={loading || fetchingLive}
-                className="d-flex align-items-center gap-2 fw-semibold"
-                title="Seçili aralıktaki tüm günleri Aksa RMSA'dan canlı olarak çek ve kaydet"
-              >
-                <RefreshCw size={16} className={fetchingLive ? 'spin' : ''} />
-                <span>{fetchingLive ? 'Aksa’dan Çekiliyor...' : 'Aksa’dan Canlı Geçmiş Getir'}</span>
-              </Button>
+            <Button
+              variant="primary"
+              onClick={handleFetchLiveRange}
+              disabled={loading || fetchingLive}
+              className="d-flex align-items-center justify-content-center gap-2 fw-bold px-3 py-2 flex-grow-1 flex-sm-grow-0 shadow-sm"
+            >
+              <RefreshCw size={16} className={fetchingLive ? 'spin' : ''} />
+              <span>{fetchingLive ? 'Aksa’dan Çekiliyor...' : 'Aksa’dan Canlı Getir'}</span>
+            </Button>
 
-              <Button
-                variant="outline-success"
-                onClick={handleExportExcel}
-                disabled={history.length === 0}
-                title="Excel İndir"
-              >
-                <FileSpreadsheet size={18} />
-              </Button>
-            </Col>
-          </Row>
-        </Card.Body>
-      </Card>
+            <Button
+              variant="outline-success"
+              onClick={handleExportExcel}
+              disabled={history.length === 0}
+              className="px-3 py-2 d-flex align-items-center justify-content-center gap-1"
+              title="Excel İndir"
+            >
+              <FileSpreadsheet size={18} />
+            </Button>
+          </Col>
+        </Row>
+      </div>
 
       {message && (
-        <Alert variant={message.type} dismissible onClose={() => setMessage(null)} className="shadow-sm">
+        <Alert variant={message.type} dismissible onClose={() => setMessage(null)} className="shadow-sm rounded-3 mb-3">
           {message.text}
         </Alert>
       )}
 
-      {/* Summary Cards for Selected Period */}
+      {/* Summary KPI Cards for Selected Period */}
       {history.length > 0 && (
-        <Row className="g-3 mb-4">
-          <Col md={4} sm={6}>
-            <Card className="border-0 shadow-sm bg-white border-start border-4 border-primary">
-              <Card.Body className="p-3">
-                <div className="text-muted small fw-semibold">Dönem Toplam Tüketim (Sm³)</div>
-                <h3 className="fw-bold text-primary mb-0 mt-1">
-                  {totalPeriodSm3.toLocaleString('tr-TR')} <small className="fs-6 text-muted">Sm³</small>
-                </h3>
-              </Card.Body>
-            </Card>
+        <Row className="g-3 mb-3 mb-md-4">
+          <Col md={4} sm={6} xs={12}>
+            <div className="kpi-card">
+              <div className="d-flex align-items-center justify-content-between">
+                <div>
+                  <div className="text-muted small fw-bold text-uppercase" style={{ fontSize: '11px' }}>
+                    DÖNEM TOPLAM TÜKETİM
+                  </div>
+                  <div className="fs-3 fw-bolder text-primary mt-1">
+                    {totalPeriodSm3.toLocaleString('tr-TR')} <small className="fs-6 fw-normal text-muted">Sm³</small>
+                  </div>
+                </div>
+                <div className="kpi-icon-box bg-primary-subtle text-primary">
+                  <Activity size={24} />
+                </div>
+              </div>
+            </div>
           </Col>
 
-          <Col md={4} sm={6}>
-            <Card className="border-0 shadow-sm bg-white border-start border-4 border-info">
-              <Card.Body className="p-3">
-                <div className="text-muted small fw-semibold">Dönem Toplam Enerji (kcal)</div>
-                <h3 className="fw-bold text-info mb-0 mt-1">
-                  {totalPeriodEnergyKcal.toLocaleString('tr-TR')} <small className="fs-6 text-muted">kcal</small>
-                </h3>
-              </Card.Body>
-            </Card>
+          <Col md={4} sm={6} xs={12}>
+            <div className="kpi-card">
+              <div className="d-flex align-items-center justify-content-between">
+                <div>
+                  <div className="text-muted small fw-bold text-uppercase" style={{ fontSize: '11px' }}>
+                    DÖNEM TOPLAM ENERJİ
+                  </div>
+                  <div className="fs-3 fw-bolder text-info mt-1">
+                    {totalPeriodEnergyKcal.toLocaleString('tr-TR')} <small className="fs-6 fw-normal text-muted">kcal</small>
+                  </div>
+                </div>
+                <div className="kpi-icon-box bg-info-subtle text-info">
+                  <Flame size={24} />
+                </div>
+              </div>
+            </div>
           </Col>
 
-          <Col md={4} sm={12}>
-            <Card className="border-0 shadow-sm bg-white border-start border-4 border-success">
-              <Card.Body className="p-3">
-                <div className="text-muted small fw-semibold">Toplam Günlük Kayıt Sayısı</div>
-                <h3 className="fw-bold text-success mb-0 mt-1">{history.length} Gün</h3>
-              </Card.Body>
-            </Card>
+          <Col md={4} sm={12} xs={12}>
+            <div className="kpi-card">
+              <div className="d-flex align-items-center justify-content-between">
+                <div>
+                  <div className="text-muted small fw-bold text-uppercase" style={{ fontSize: '11px' }}>
+                    TOPLAM LİSTELENEN KAYIT
+                  </div>
+                  <div className="fs-3 fw-bolder text-success mt-1">{history.length} Gün / Kayıt</div>
+                </div>
+                <div className="kpi-icon-box bg-success-subtle text-success">
+                  <Calendar size={24} />
+                </div>
+              </div>
+            </div>
           </Col>
         </Row>
       )}
 
-      <Card className="shadow-sm border-0">
-        <Card.Header className="bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
-          <h5 className="fw-bold mb-0">Geçmiş Kayıtlar ({history.length})</h5>
-          <span className="text-muted small">{startDate} &rarr; {endDate}</span>
-        </Card.Header>
+      {/* Results Card */}
+      <div className="dashboard-card overflow-hidden">
+        <div className="p-3 p-md-4 border-bottom d-flex justify-content-between align-items-center bg-white">
+          <h6 className="fw-bold mb-0 text-dark">Geçmiş Kayıt Listesi ({history.length})</h6>
+          <span className="badge bg-light text-dark border">{startDate} &rarr; {endDate}</span>
+        </div>
 
-        <Card.Body className="p-0">
-          {loading || fetchingLive ? (
-            <div className="text-center py-5">
-              <Spinner animation="border" variant="primary" />
-              <div className="mt-2 text-muted">
-                {fetchingLive ? 'Seçili tarih aralığındaki günler Aksa RMSA üzerinden sorgulanıyor...' : 'Kayıtlar yükleniyor...'}
-              </div>
+        {loading || fetchingLive ? (
+          <div className="text-center py-5">
+            <Spinner animation="border" variant="primary" />
+            <div className="mt-3 text-muted fw-semibold">
+              {fetchingLive ? 'Seçili tarih aralığındaki günler Aksa RMSA üzerinden sorgulanıyor...' : 'Kayıtlar yükleniyor...'}
             </div>
-          ) : history.length === 0 ? (
-            <div className="text-center py-5 text-muted">
-              <div>Seçilen tarih aralığı için kayıt bulunamadı.</div>
-              <Button
-                variant="primary"
-                size="sm"
-                className="mt-3 d-inline-flex align-items-center gap-2"
-                onClick={handleFetchLiveRange}
-              >
-                <RefreshCw size={15} />
-                <span>Bu Tarih Aralığını Aksa'dan Canlı Çek</span>
-              </Button>
-            </div>
-          ) : (
-            <div className="table-responsive">
-              <Table hover align="middle" className="mb-0 table-striped">
-                <thead className="table-dark">
+          </div>
+        ) : history.length === 0 ? (
+          <div className="text-center py-5 text-muted px-3">
+            <div>Seçilen tarih aralığı için kayıt bulunamadı.</div>
+            <Button
+              variant="primary"
+              size="sm"
+              className="mt-3 d-inline-flex align-items-center gap-2 px-3 py-2"
+              onClick={handleFetchLiveRange}
+            >
+              <RefreshCw size={15} />
+              <span>Bu Tarih Aralığını Aksa'dan Canlı Çek</span>
+            </Button>
+          </div>
+        ) : (
+          <>
+            {/* DESKTOP TABLE */}
+            <div className="table-responsive d-none d-md-block">
+              <Table className="modern-table">
+                <thead>
                   <tr>
                     <th>Gaz Günü</th>
                     <th>İstasyon Adı</th>
-                    <th className="text-end">5-Tüketim (Sm³)</th>
-                    <th className="text-end">6-Enerji (kcal)</th>
-                    <th className="text-center">7-Isıl Değer (Ho)</th>
-                    <th className="text-center">Basınç</th>
-                    <th className="text-center">Sıcaklık</th>
+                    <th className="text-end">5 - Tüketim (Sm³)</th>
+                    <th className="text-end">6 - Enerji (kcal)</th>
+                    <th className="text-center">7 - Isıl Değer (Ho)</th>
+                    <th className="text-center">Basınç / Sıcaklık</th>
                     <th className="text-center">Durum</th>
-                    <th className="text-center">Belgeler</th>
+                    <th className="text-center">PDF Rapor</th>
                     <th>Not / Açıklama</th>
-                    <th className="text-end" style={{ width: '80px' }}>Detay</th>
+                    <th className="text-end">Detay</th>
                   </tr>
                 </thead>
                 <tbody>
                   {history.map((reading) => (
                     <tr key={reading._id}>
-                      <td className="fw-bold">{reading.gasDate}</td>
+                      <td className="fw-bold text-dark">{reading.gasDate}</td>
                       <td>
-                        <div className="fw-semibold text-dark">{reading.stationName}</div>
+                        <div className="fw-bold text-dark">{reading.stationName}</div>
                         <small className="text-muted"><code>{reading.u}</code></small>
                       </td>
-                      <td className="text-end fw-bold text-primary">
+                      <td className="text-end fw-bolder text-primary">
                         {reading.consumption !== null && reading.consumption !== undefined
                           ? Number(reading.consumption).toLocaleString('tr-TR')
                           : '—'}
                       </td>
-                      <td className="text-end fw-semibold">
+                      <td className="text-end fw-bold text-dark">
                         {reading.energy !== null && reading.energy !== undefined
                           ? Number(reading.energy).toLocaleString('tr-TR')
                           : '—'}
@@ -328,7 +354,7 @@ export default function ArchivePage() {
                             <span className="fw-bold">{Number(reading.superiorHeatingValue).toLocaleString('tr-TR')}</span>
                             {reading.isSubstitutedSHV && (
                               <div>
-                                <Badge bg="info" className="p-1" style={{ fontSize: '9px' }}>
+                                <Badge bg="info" className="p-1 mt-0.5" style={{ fontSize: '9px' }}>
                                   7 Nolu İkame
                                 </Badge>
                               </div>
@@ -336,12 +362,14 @@ export default function ArchivePage() {
                           </div>
                         ) : '—'}
                       </td>
-                      <td className="text-center">{reading.pressure ? `${reading.pressure} Bar` : '—'}</td>
-                      <td className="text-center">{reading.temperature ? `${reading.temperature} °C` : '—'}</td>
+                      <td className="text-center">
+                        <div className="small fw-semibold">{reading.pressure ? `${reading.pressure} Bar` : '—'}</div>
+                        <div className="text-muted" style={{ fontSize: '11px' }}>{reading.temperature ? `${reading.temperature} °C` : '—'}</div>
+                      </td>
                       <td className="text-center">
                         {reading.status === 'APPROVED' && (
                           <div>
-                            <Badge bg="success">ONAYLANDI</Badge>
+                            <Badge bg="success" pill>ONAYLANDI</Badge>
                             {reading.approvalInfo?.actionAt && (
                               <div className="text-success fw-semibold mt-1" style={{ fontSize: '10px' }}>
                                 {new Date(reading.approvalInfo.actionAt).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -352,7 +380,7 @@ export default function ArchivePage() {
                         )}
                         {reading.status === 'DENIED' && (
                           <div>
-                            <Badge bg="danger">REDDEDİLDİ</Badge>
+                            <Badge bg="danger" pill>REDDEDİLDİ</Badge>
                             {reading.approvalInfo?.actionAt && (
                               <div className="text-danger fw-semibold mt-1" style={{ fontSize: '10px' }}>
                                 {new Date(reading.approvalInfo.actionAt).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -361,34 +389,30 @@ export default function ArchivePage() {
                             )}
                           </div>
                         )}
-                        {reading.status === 'PENDING' && <Badge bg="warning" text="dark">BEKLEMEDE</Badge>}
+                        {reading.status === 'PENDING' && <Badge bg="warning" text="dark" pill>BEKLEMEDE</Badge>}
                       </td>
                       <td className="text-center">
-                        <div className="d-inline-flex align-items-center gap-1">
-                          {reading.files && reading.files.length > 0 ? (
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              className="p-1 px-2 small d-inline-flex align-items-center gap-1"
-                              onClick={() => setDetailModalData(reading)}
-                              title="PDF Raporu ve Verileri Yan Yana İncele"
-                            >
-                              <FileText size={14} />
-                              <span>{reading.files.length} Rapor</span>
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="outline-secondary"
-                              size="sm"
-                              className="p-1 px-2 small"
-                              onClick={() => setUploadModalData(reading)}
-                              title="Dosya Yükle"
-                            >
-                              <FileText size={14} className="me-1" />
-                              <span>Yükle</span>
-                            </Button>
-                          )}
-                        </div>
+                        {reading.files && reading.files.length > 0 ? (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            className="px-2.5 py-1 small d-inline-flex align-items-center gap-1"
+                            onClick={() => setDetailModalData(reading)}
+                          >
+                            <FileText size={14} />
+                            <span>{reading.files.length} Rapor</span>
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline-secondary"
+                            size="sm"
+                            className="px-2.5 py-1 small"
+                            onClick={() => setUploadModalData(reading)}
+                          >
+                            <Upload size={13} className="me-1" />
+                            <span>Yükle</span>
+                          </Button>
+                        )}
                       </td>
                       <td className="small">
                         {reading.operatorNote && (
@@ -396,21 +420,16 @@ export default function ArchivePage() {
                             📝 {reading.operatorNote.length > 35 ? reading.operatorNote.slice(0, 35) + '...' : reading.operatorNote}
                           </div>
                         )}
-                        {reading.approvalInfo?.actionBy && (
-                          <div className="text-muted" style={{ fontSize: '11px' }}>
-                            {reading.approvalInfo.actionBy} ({new Date(reading.approvalInfo.actionAt).toLocaleDateString('tr-TR')})
-                          </div>
-                        )}
                       </td>
                       <td className="text-end">
                         <Button
-                          variant="outline-info"
+                          variant="light"
                           size="sm"
-                          className="p-1 px-2"
+                          className="p-1.5 border text-info"
                           onClick={() => setDetailModalData(reading)}
                           title="Detay İncele"
                         >
-                          <Eye size={15} />
+                          <Eye size={16} />
                         </Button>
                       </td>
                     </tr>
@@ -418,9 +437,82 @@ export default function ArchivePage() {
                 </tbody>
               </Table>
             </div>
-          )}
-        </Card.Body>
-      </Card>
+
+            {/* MOBILE CARDS */}
+            <div className="d-md-none p-3 bg-light">
+              {history.map((reading) => {
+                const isApproved = reading.status === 'APPROVED';
+                const isDenied = reading.status === 'DENIED';
+                const hasFiles = reading.files && reading.files.length > 0;
+                const statusClass = isApproved ? 'status-approved' : isDenied ? 'status-denied' : 'status-pending';
+
+                return (
+                  <div key={reading._id} className={`mobile-station-card ${statusClass}`}>
+                    <div className="d-flex justify-content-between align-items-start mb-2">
+                      <div>
+                        <div className="fw-bolder text-dark">{reading.stationName}</div>
+                        <div className="text-muted small">
+                          📅 <strong>{reading.gasDate}</strong> • <code>{reading.u}</code>
+                        </div>
+                      </div>
+                      {isApproved && <Badge bg="success" pill>ONAYLANDI</Badge>}
+                      {isDenied && <Badge bg="danger" pill>REDDEDİLDİ</Badge>}
+                      {!isApproved && !isDenied && <Badge bg="warning" text="dark" pill>BEKLEMEDE</Badge>}
+                    </div>
+
+                    <div className="mobile-metric-grid">
+                      <div className="mobile-metric-item">
+                        <div className="text-muted" style={{ fontSize: '10.5px', fontWeight: 600 }}>5-TÜKETİM</div>
+                        <div className="fw-bolder text-primary">
+                          {reading.consumption !== null ? `${Number(reading.consumption).toLocaleString('tr-TR')} Sm³` : '—'}
+                        </div>
+                      </div>
+                      <div className="mobile-metric-item">
+                        <div className="text-muted" style={{ fontSize: '10.5px', fontWeight: 600 }}>6-ENERJİ</div>
+                        <div className="fw-bold text-success">
+                          {reading.energy !== null ? `${Number(reading.energy).toLocaleString('tr-TR')} kcal` : '—'}
+                        </div>
+                      </div>
+                      <div className="mobile-metric-item">
+                        <div className="text-muted" style={{ fontSize: '10.5px', fontWeight: 600 }}>7-ÜST ISIL (Ho)</div>
+                        <div className="fw-bold text-dark">
+                          {reading.superiorHeatingValue !== null ? Number(reading.superiorHeatingValue).toLocaleString('tr-TR') : '—'}
+                        </div>
+                      </div>
+                      <div className="mobile-metric-item">
+                        <div className="text-muted" style={{ fontSize: '10.5px', fontWeight: 600 }}>BASINÇ / SICAKLIK</div>
+                        <div className="small fw-semibold text-dark">
+                          {reading.pressure ?? '—'} Bar / {reading.temperature ?? '—'} °C
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="d-flex gap-2 pt-2 border-top">
+                      <Button
+                        variant={hasFiles ? 'primary' : 'outline-info'}
+                        size="sm"
+                        className="flex-grow-1 d-flex align-items-center justify-content-center gap-1 py-2"
+                        onClick={() => setDetailModalData(reading)}
+                      >
+                        <Eye size={15} />
+                        <span>{hasFiles ? `Rapor & Detay (${reading.files.length})` : 'Detay İncele'}</span>
+                      </Button>
+                      <Button
+                        variant="outline-secondary"
+                        size="sm"
+                        className="px-3 py-2"
+                        onClick={() => setUploadModalData(reading)}
+                      >
+                        <Upload size={15} />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
 
       <ReadingDetailModal
         show={!!detailModalData}

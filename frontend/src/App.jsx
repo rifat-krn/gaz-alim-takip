@@ -31,7 +31,7 @@ export default function App() {
     <div className="min-vh-100 bg-light d-flex flex-column">
       <AppNavbar activeTab={activeTab} setActiveTab={setActiveTab} />
       
-      <Container fluid className="px-4 pb-5 flex-grow-1">
+      <Container fluid className="px-2 px-sm-3 px-md-4 pb-5 flex-grow-1">
         {activeTab === 'daily' && <DailyReadingsPage />}
         {activeTab === 'archive' && <ArchivePage />}
         {activeTab === 'stations' && isAdmin && <StationsPage />}
